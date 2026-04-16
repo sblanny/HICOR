@@ -3,8 +3,14 @@ import SwiftData
 
 final class PersistenceService {
     static let shared: PersistenceService = {
+        let schema = Schema([PatientRefraction.self])
+        let config = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none
+        )
         do {
-            let container = try ModelContainer(for: PatientRefraction.self)
+            let container = try ModelContainer(for: schema, configurations: [config])
             return PersistenceService(container: container)
         } catch {
             fatalError("Failed to initialize ModelContainer: \(error)")
