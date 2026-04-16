@@ -37,7 +37,7 @@ final class CloudKitServiceTests: XCTestCase {
         XCTAssertEqual(restored.deviceID, "device-xyz")
     }
 
-    func testSaveRecordSetsCloudKitRecordID() async throws {
+    func testSaveRecordReturnsCloudKitRecordID() async throws {
         let mock = MockCKDatabase()
         let returnedRecord = CKRecord(
             recordType: CloudKitService.recordType,
@@ -47,13 +47,10 @@ final class CloudKitServiceTests: XCTestCase {
         let service = CloudKitService(database: mock)
 
         let p = PatientRefraction(patientNumber: "1", sessionDate: Date(), sessionLocation: "L")
-        XCTAssertFalse(p.syncedToCloud)
-        XCTAssertNil(p.cloudKitRecordID)
 
-        try await service.saveRecord(p)
+        let recordID = try await service.saveRecord(p)
 
-        XCTAssertEqual(p.cloudKitRecordID, "rec-abc")
-        XCTAssertTrue(p.syncedToCloud)
+        XCTAssertEqual(recordID, "rec-abc")
         XCTAssertEqual(mock.savedRecords.count, 1)
     }
 
@@ -65,16 +62,13 @@ final class CloudKitServiceTests: XCTestCase {
         let p = PatientRefraction(patientNumber: "1", sessionDate: Date(), sessionLocation: "L")
 
         do {
-            try await service.saveRecord(p)
+            _ = try await service.saveRecord(p)
             XCTFail("Expected CKError to propagate")
         } catch let error as CKError {
             XCTAssertEqual(error.code, .networkUnavailable)
         } catch {
             XCTFail("Wrong error type: \(error)")
         }
-
-        XCTAssertFalse(p.syncedToCloud)
-        XCTAssertNil(p.cloudKitRecordID)
     }
 
     func testFetchRecordsReturnsConvertedRefractions() async throws {

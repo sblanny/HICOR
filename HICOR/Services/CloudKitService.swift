@@ -17,8 +17,6 @@ protocol CKDatabaseProtocol {
 extension CKDatabase: CKDatabaseProtocol {}
 
 final class CloudKitService {
-    static let shared = CloudKitService()
-
     enum ServiceError: Error {
         case notImplementedInPhase1
     }
@@ -86,11 +84,10 @@ final class CloudKitService {
         )
     }
 
-    func saveRecord(_ refraction: PatientRefraction) async throws {
+    func saveRecord(_ refraction: PatientRefraction) async throws -> String {
         let record = CloudKitService.makeRecord(from: refraction)
         let saved = try await database.save(record)
-        refraction.cloudKitRecordID = saved.recordID.recordName
-        refraction.syncedToCloud = true
+        return saved.recordID.recordName
     }
 
     func fetchRecords(for date: Date) async throws -> [PatientRefraction] {

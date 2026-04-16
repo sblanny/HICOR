@@ -29,7 +29,7 @@ HICOR/
 
 | File | Responsibility |
 |---|---|
-| `App/HICORApp.swift` | `@main` entry, SwiftData `ModelContainer`, lens inventory bootstrap, foreground `BackgroundSyncService` hook |
+| `App/HICORApp.swift` | `@main` entry and DI root: owns the single `ModelContainer` + all services (`PersistenceService`, `CloudKitService`, `SyncCoordinator`, `BackgroundSyncService`), wires them into the scene, bootstraps lens inventory, and fires `BackgroundSyncService.syncIfNeeded` on foreground |
 | `App/ContentView.swift` | `NavigationStack` root rooted at `SessionSetupView`; resets via `.hicorReturnToRoot` notification |
 | `Models/RawReading.swift` | One reading line from a printout (SPH/CYL/AX, eye, source photo index) |
 | `Models/EyeReading.swift` | All readings for one eye from one photo + machine AVG line |
@@ -38,11 +38,11 @@ HICOR/
 | `Models/SessionContext.swift` | `@Observable` holder for date + location passed through NavigationStack |
 | `Models/PhotoCaptureState.swift` | `@Observable` capture-screen state: photos list, PD entry, analyze/commit gating |
 | `Models/LensInventory.swift` | `LensOption` and `LensInventory` Codable structs |
-| `Services/PersistenceService.swift` | SwiftData `ModelContainer` + insert/fetch CRUD + `fetchUnsynced` + `save` |
+| `Services/PersistenceService.swift` | `@ModelActor` — actor-isolated `ModelContext` providing `insert` / `fetch` / `fetchUnsynced` / `markSynced` / `save`. Constructed once in `HICORApp.init` and injected |
 | `Services/LensInventoryService.swift` | Loads `DefaultInventory.json`, supports user override in Documents |
-| `Services/CloudKitService.swift` | `CKRecord` conversion + real `CKDatabase` save/fetch (DI via `CKDatabaseProtocol`) |
-| `Services/SyncCoordinator.swift` | `@Observable` orchestrator: local insert → CloudKit save → persist sync state |
-| `Services/BackgroundSyncService.swift` | Foreground-triggered retry loop over `fetchUnsynced` records |
+| `Services/CloudKitService.swift` | `CKRecord` conversion + real `CKDatabase` save/fetch (DI via `CKDatabaseProtocol`). `saveRecord` returns the new record ID; persistence-side mutation happens in `PersistenceService.markSynced` |
+| `Services/SyncCoordinator.swift` | `@MainActor @Observable` orchestrator injected with persistence + cloudKit: local `insert` → CloudKit save → `markSynced` |
+| `Services/BackgroundSyncService.swift` | `@MainActor @Observable` retry loop injected with persistence + cloudKit; resyncs unsynced records on foreground |
 | `Views/SessionSetupView.swift` | Launch screen: date + location, pre-filled from `SessionSettings.load()` |
 | `Views/PatientEntryView.swift` | Numeric patient number entry with auto-focus |
 | `Views/PhotoCaptureView.swift` | 2–5 photo capture, thumbnail row, PD banner, DEBUG simulate-no-PD toggle |
@@ -110,11 +110,27 @@ See `RESEARCH.md` for sources and tentative conclusions. Deep pass is required *
 - **iPhone first.** iPad layout is a future version.
 - **No login.** Device identity (`identifierForVendor`) only.
 
-## SwiftData + CloudKit Interaction
+## Persistence Architecture
 
-Because `HICOR.entitlements` declares CloudKit services, `ModelConfiguration` would default `cloudKitDatabase` to `.automatic` and make SwiftData attempt its own CloudKit auto-sync at `ModelContainer` init. That path requires the private DB and all stored properties to be optional or have inline defaults — neither is true here (we use the public DB, and `PatientRefraction` has many non-optional stored properties), so device installs crash with `SwiftDataError.loadIssueModelContainer`.
+### App-rooted DI
 
-`HICORApp.sharedModelContainer` therefore builds its `ModelConfiguration` with `cloudKitDatabase: .none`, opting out of SwiftData's automatic integration entirely. Our CloudKit sync is manual via `SyncCoordinator` / `CloudKitService` and is unaffected. There is also a one-shot retry that deletes `config.url` if the initial load fails, as defense-in-depth for genuine schema-mismatch corruption during future migrations.
+`HICORApp.init()` is the single source of persistence construction. It builds the `ModelContainer` once, then constructs `PersistenceService`, `CloudKitService`, `SyncCoordinator`, and `BackgroundSyncService` with explicit dependencies. The scene receives `.modelContainer(container)` (so SwiftUI `@Query` / `@Environment(\.modelContext)` work) and `.environment(syncCoordinator)` (so `AnalysisPlaceholderView` can pull it out). No service declares a `static let shared` — tests and production both go through the same initializers.
+
+### `@ModelActor` isolation
+
+`PersistenceService` is a `@ModelActor actor`. Its `ModelContext` is created on the actor's executor and never touched from the main queue, which eliminates the *"SwiftData.ModelContext: Unbinding from the main queue"* warnings previous code triggered. All CRUD methods are `async throws`; callers (`SyncCoordinator`, `BackgroundSyncService`, tests) `await` them.
+
+`CloudKitService.saveRecord` returns the CloudKit `recordName` instead of mutating the passed-in model. The caller passes that ID back into `PersistenceService.markSynced(id:cloudKitRecordID:)` so the mutation happens inside the actor. This keeps all writes to `@Model` instances on the actor's isolation domain.
+
+### SwiftData + CloudKit opt-out
+
+`HICOR.entitlements` declares CloudKit services, which by default would make `ModelConfiguration` set `cloudKitDatabase` to `.automatic` and force SwiftData's built-in CloudKit sync on `ModelContainer` init. That path requires the private DB plus all stored properties optional or with inline defaults — we use the public DB and `PatientRefraction` has many non-optional stored properties, so leaving it automatic crashes device installs with `SwiftDataError.loadIssueModelContainer`.
+
+`HICORApp.makeModelContainer()` therefore sets `cloudKitDatabase: .none`, disabling SwiftData's automatic integration entirely. Our CloudKit sync is manual via `SyncCoordinator` / `CloudKitService`. The container init also has a one-shot retry that deletes `config.url` if the initial load fails, as defense-in-depth for genuine schema-mismatch corruption during future migrations.
+
+### Known future work: Swift 6 strict concurrency
+
+In Swift 5.10 mode the actor methods freely accept and return `PatientRefraction` instances across the actor boundary; `@Model` classes aren't `Sendable`, so a future move to Swift 6 strict-concurrency mode will produce compile errors at those boundaries. The canonical migration is to pass `PersistentIdentifier` or `Sendable` struct snapshots across the actor instead. Deferred, not a runtime issue today.
 
 ## Build & Test
 

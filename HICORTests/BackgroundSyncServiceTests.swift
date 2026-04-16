@@ -3,16 +3,17 @@ import CloudKit
 import SwiftData
 @testable import HICOR
 
+@MainActor
 final class BackgroundSyncServiceTests: XCTestCase {
     var persistence: PersistenceService!
     var mock: MockCKDatabase!
     var cloudKit: CloudKitService!
     var service: BackgroundSyncService!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: PatientRefraction.self, configurations: config)
-        persistence = PersistenceService(container: container)
+        persistence = PersistenceService(modelContainer: container)
         mock = MockCKDatabase()
         cloudKit = CloudKitService(database: mock)
         service = BackgroundSyncService(persistence: persistence, cloudKit: cloudKit)
@@ -26,7 +27,7 @@ final class BackgroundSyncServiceTests: XCTestCase {
             cloudKitRecordID: "already",
             syncedToCloud: true
         )
-        persistence.insert(p)
+        try await persistence.insert(p)
 
         await service.syncIfNeeded()
 
@@ -35,7 +36,7 @@ final class BackgroundSyncServiceTests: XCTestCase {
 
     func testSyncIfNeededAttemptsEachUnsyncedRecord() async throws {
         for name in ["A", "B", "C"] {
-            persistence.insert(PatientRefraction(
+            try await persistence.insert(PatientRefraction(
                 patientNumber: name,
                 sessionDate: Date(),
                 sessionLocation: "L"
@@ -45,29 +46,31 @@ final class BackgroundSyncServiceTests: XCTestCase {
         await service.syncIfNeeded()
 
         XCTAssertEqual(mock.savedRecords.count, 3)
-        XCTAssertEqual(persistence.fetchUnsynced().count, 0)
+        let remaining = try await persistence.fetchUnsynced()
+        XCTAssertEqual(remaining.count, 0)
     }
 
     func testSyncIfNeededContinuesAfterPartialFailure() async throws {
         let a = PatientRefraction(patientNumber: "A", sessionDate: Date(), sessionLocation: "L")
         let b = PatientRefraction(patientNumber: "B", sessionDate: Date(), sessionLocation: "L")
         let c = PatientRefraction(patientNumber: "C", sessionDate: Date(), sessionLocation: "L")
-        persistence.insert(a)
-        persistence.insert(b)
-        persistence.insert(c)
+        try await persistence.insert(a)
+        try await persistence.insert(b)
+        try await persistence.insert(c)
 
-        let unsynced = persistence.fetchUnsynced()
+        let unsynced = try await persistence.fetchUnsynced()
         XCTAssertEqual(unsynced.count, 3)
-        mock.perCallBehaviors = unsynced.map { record -> MockCKDatabase.SaveBehavior in
+        let behaviors: [MockCKDatabase.SaveBehavior] = unsynced.map { record in
             record.patientNumber == "B"
                 ? .throwError(CKError(.networkUnavailable))
                 : .echo
         }
+        mock.perCallBehaviors = behaviors
 
         await service.syncIfNeeded()
 
         XCTAssertEqual(mock.savedRecords.count, 3)
-        let remaining = persistence.fetchUnsynced().map { $0.patientNumber }
+        let remaining = try await persistence.fetchUnsynced().map(\.patientNumber)
         XCTAssertEqual(Set(remaining), ["B"])
     }
 }

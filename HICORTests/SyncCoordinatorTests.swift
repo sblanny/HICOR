@@ -3,13 +3,14 @@ import CloudKit
 import SwiftData
 @testable import HICOR
 
+@MainActor
 final class SyncCoordinatorTests: XCTestCase {
     var persistence: PersistenceService!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: PatientRefraction.self, configurations: config)
-        persistence = PersistenceService(container: container)
+        persistence = PersistenceService(modelContainer: container)
     }
 
     func testSaveInsertsLocallyEvenIfCloudKitFails() async throws {
@@ -21,7 +22,7 @@ final class SyncCoordinatorTests: XCTestCase {
         let p = PatientRefraction(patientNumber: "OFFLINE", sessionDate: Date(), sessionLocation: "L")
         await coordinator.save(p)
 
-        let fetched = persistence.fetch(byID: p.id)
+        let fetched = try await persistence.fetch(byID: p.id)
         XCTAssertNotNil(fetched)
         XCTAssertEqual(fetched?.patientNumber, "OFFLINE")
         XCTAssertFalse(fetched?.syncedToCloud ?? true)
@@ -41,7 +42,7 @@ final class SyncCoordinatorTests: XCTestCase {
         let p = PatientRefraction(patientNumber: "ONLINE", sessionDate: Date(), sessionLocation: "L")
         await coordinator.save(p)
 
-        let fetched = persistence.fetch(byID: p.id)
+        let fetched = try await persistence.fetch(byID: p.id)
         XCTAssertNotNil(fetched)
         XCTAssertTrue(fetched?.syncedToCloud ?? false,
                       "Re-fetched record should reflect persisted syncedToCloud=true")
