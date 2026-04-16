@@ -110,6 +110,10 @@ See `RESEARCH.md` for sources and tentative conclusions. Deep pass is required *
 - **iPhone first.** iPad layout is a future version.
 - **No login.** Device identity (`identifierForVendor`) only.
 
+## SwiftData First-Install Resilience
+
+On first device install (or after a schema change), the SwiftData `ModelContainer` load can fail with `SwiftDataError.loadIssueModelContainer`. `HICORApp.sharedModelContainer` handles this automatically: if the initial load throws, it deletes the store file at `ModelConfiguration.url` and retries once before falling back to `fatalError`.
+
 ## Build & Test
 
 ```bash
