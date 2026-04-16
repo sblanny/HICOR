@@ -1,0 +1,29 @@
+# Xcode
+*.xcodeproj/
+!project.yml
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# User-specific
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Claude Code working directory
+.claude/
+
+# Local artifacts not yet integrated
+AppIcon.appiconset.zip

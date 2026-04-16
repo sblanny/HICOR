@@ -1,0 +1,63 @@
+name: HICOR
+options:
+  bundleIdPrefix: com.creativearchives
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  xcodeVersion: "26.1"
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    DEVELOPMENT_TEAM: 52KA3KSGP9
+    SWIFT_VERSION: "5.10"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+    GCC_TREAT_WARNINGS_AS_ERRORS: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  HICOR:
+    type: application
+    platform: iOS
+    sources:
+      - path: HICOR
+        excludes:
+          - "Documentation/**"
+    resources:
+      - path: HICOR/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.creativearchives.hicor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  HICORTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HICORTests
+    dependencies:
+      - target: HICOR
+    settings:
+      base:
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/HICOR.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HICOR"
+schemes:
+  HICOR:
+    build:
+      targets:
+        HICOR: all
+        HICORTests: [test]
+    test:
+      targets:
+        - HICORTests
+    run:
+      config: Debug
