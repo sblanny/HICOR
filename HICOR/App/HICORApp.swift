@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct HICORApp: App {
@@ -19,6 +20,13 @@ struct HICORApp: App {
         WindowGroup {
             ContentView()
                 .environment(SyncCoordinator.shared)
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: UIApplication.willEnterForegroundNotification
+                    )
+                ) { _ in
+                    Task { await BackgroundSyncService.shared.syncIfNeeded() }
+                }
         }
         .modelContainer(sharedModelContainer)
     }

@@ -1,25 +1,21 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var sessionContext = SessionContext()
+    @State private var rootID = UUID()
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                Text("HICOR")
-                    .font(.largeTitle.bold())
-                Text("Highlands Church Optical Refraction")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("Phase 1 skeleton — UI in later phases")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 32)
-            }
-            .padding()
-            .navigationTitle("HICOR")
+            SessionSetupView(sessionContext: sessionContext)
+        }
+        .id(rootID)
+        .onReceive(NotificationCenter.default.publisher(for: .hicorReturnToRoot)) { _ in
+            rootID = UUID()
         }
     }
 }
 
 #Preview {
     ContentView()
+        .environment(SyncCoordinator.shared)
 }
