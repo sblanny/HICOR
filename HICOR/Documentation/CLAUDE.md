@@ -110,9 +110,11 @@ See `RESEARCH.md` for sources and tentative conclusions. Deep pass is required *
 - **iPhone first.** iPad layout is a future version.
 - **No login.** Device identity (`identifierForVendor`) only.
 
-## SwiftData First-Install Resilience
+## SwiftData + CloudKit Interaction
 
-On first device install (or after a schema change), the SwiftData `ModelContainer` load can fail with `SwiftDataError.loadIssueModelContainer`. `HICORApp.sharedModelContainer` handles this automatically: if the initial load throws, it deletes the store file at `ModelConfiguration.url` and retries once before falling back to `fatalError`.
+Because `HICOR.entitlements` declares CloudKit services, `ModelConfiguration` would default `cloudKitDatabase` to `.automatic` and make SwiftData attempt its own CloudKit auto-sync at `ModelContainer` init. That path requires the private DB and all stored properties to be optional or have inline defaults — neither is true here (we use the public DB, and `PatientRefraction` has many non-optional stored properties), so device installs crash with `SwiftDataError.loadIssueModelContainer`.
+
+`HICORApp.sharedModelContainer` therefore builds its `ModelConfiguration` with `cloudKitDatabase: .none`, opting out of SwiftData's automatic integration entirely. Our CloudKit sync is manual via `SyncCoordinator` / `CloudKitService` and is unaffected. There is also a one-shot retry that deletes `config.url` if the initial load fails, as defense-in-depth for genuine schema-mismatch corruption during future migrations.
 
 ## Build & Test
 

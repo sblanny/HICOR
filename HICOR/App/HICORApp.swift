@@ -6,7 +6,11 @@ import UIKit
 struct HICORApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([PatientRefraction.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let config = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none
+        )
         do {
             return try ModelContainer(for: schema, configurations: [config])
         } catch {
