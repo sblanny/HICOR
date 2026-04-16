@@ -33,4 +33,23 @@ struct OCRDebugSnapshot: Codable, Equatable {
     }
     let entries: [Entry]
     let overallError: String
+
+    /// Returns a copy with per-entry preprocessed JPEGs removed. Use before
+    /// persisting to CloudKit — the CKRecord field limit is ~1 MB, and
+    /// embedded JPEGs easily blow past that.
+    func strippingImages() -> OCRDebugSnapshot {
+        let stripped = entries.map { e in
+            Entry(
+                photoIndex: e.photoIndex,
+                rowBasedLines: e.rowBasedLines,
+                rowBasedFormat: e.rowBasedFormat,
+                columnBasedLines: e.columnBasedLines,
+                columnBasedFormat: e.columnBasedFormat,
+                chosenStrategy: e.chosenStrategy,
+                parseError: e.parseError,
+                preprocessedImageData: nil
+            )
+        }
+        return OCRDebugSnapshot(entries: stripped, overallError: overallError)
+    }
 }

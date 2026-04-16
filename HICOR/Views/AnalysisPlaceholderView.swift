@@ -266,7 +266,9 @@ struct AnalysisPlaceholderView: View {
     }
 
     private func persistFailure(snapshot: OCRDebugSnapshot) async {
-        let encoded = (try? JSONEncoder().encode(snapshot)) ?? Data()
+        // rawReadingsData rides in CloudKit as rawReadingsJSON, which shares the
+        // CKRecord's ~1 MB field budget. Strip embedded JPEGs before encoding.
+        let encoded = (try? JSONEncoder().encode(snapshot.strippingImages())) ?? Data()
         let failureRecord = PatientRefraction(
             patientNumber: patientNumber,
             sessionDate: sessionContext.date,

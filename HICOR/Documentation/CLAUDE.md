@@ -98,6 +98,7 @@ HICOR/
 - **Sync flow:** `SyncCoordinator.save(_:)` always inserts locally first, then attempts the CloudKit save and explicitly calls `persistence.save()` on success so the mutated `syncedToCloud` / `cloudKitRecordID` fields hit disk before the app can be backgrounded. CloudKit failures leave the record `syncedToCloud = false` for Phase 3 background retry.
 - **Why public DB:** records are shared across all team devices.
 - **Why manual sync (not `NSPersistentCloudKitContainer`):** Apple's automatic sync targets the private DB only.
+- **CloudKit payload is metadata-only.** `CKRecord` holds patient number, dates, session info, parsed SPH/CYL/AX, PD, matched lenses, and a JSON blob of raw readings — no photo bytes. Photos stay local via SwiftData's `@Attribute(.externalStorage)`. Rationale: CKRecord fields cap at ~1 MB; inlining 2–5 JPEGs regularly exceeded that and triggered `Limit Exceeded / record too large`. Phase 9 may add `CKAsset`-based photo sync if needed.
 
 ## Inventory Architecture
 

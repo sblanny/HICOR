@@ -48,12 +48,12 @@ final class VisionTextExtractor: TextExtracting {
     private let ciContext = CIContext(options: nil)
 
     func extractText(from image: UIImage) async throws -> ExtractedText {
-        let preprocessed = preprocessForOCR(image)
-        let preprocessedJPEG = preprocessed.jpegData(compressionQuality: 0.7)
-
-        guard let cgImage = preprocessed.cgImage ?? image.cgImage else {
+        guard let (rawCG, orientation) = Self.normalizedCGImage(from: image) else {
             throw VisionTextExtractorError.missingCGImage
         }
+        let preprocessedCG = preprocessForOCR(cgImage: rawCG) ?? rawCG
+        let preprocessedJPEG = uprightJPEG(cgImage: preprocessedCG, orientation: orientation)
+
         return try await withCheckedThrowingContinuation { continuation in
             let request = VNRecognizeTextRequest { request, error in
                 if let error {
@@ -78,7 +78,7 @@ final class VisionTextExtractor: TextExtracting {
                 request.revision = VNRecognizeTextRequestRevision3
             }
 
-            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up, options: [:])
+            let handler = VNImageRequestHandler(cgImage: preprocessedCG, orientation: orientation, options: [:])
             do {
                 try handler.perform([request])
             } catch {
@@ -87,9 +87,25 @@ final class VisionTextExtractor: TextExtracting {
         }
     }
 
-    private func preprocessForOCR(_ image: UIImage) -> UIImage {
-        guard let cgInput = image.cgImage else { return image }
-        let ciImage = CIImage(cgImage: cgInput)
+    private static func normalizedCGImage(from image: UIImage) -> (CGImage, CGImagePropertyOrientation)? {
+        guard let cg = image.cgImage else { return nil }
+        let orientation: CGImagePropertyOrientation
+        switch image.imageOrientation {
+        case .up: orientation = .up
+        case .down: orientation = .down
+        case .left: orientation = .left
+        case .right: orientation = .right
+        case .upMirrored: orientation = .upMirrored
+        case .downMirrored: orientation = .downMirrored
+        case .leftMirrored: orientation = .leftMirrored
+        case .rightMirrored: orientation = .rightMirrored
+        @unknown default: orientation = .up
+        }
+        return (cg, orientation)
+    }
+
+    private func preprocessForOCR(cgImage: CGImage) -> CGImage? {
+        let ciImage = CIImage(cgImage: cgImage)
 
         var processed = ciImage.transformed(by: CGAffineTransform(scaleX: 2.0, y: 2.0))
 
@@ -108,10 +124,15 @@ final class VisionTextExtractor: TextExtracting {
             processed = sharp.outputImage ?? processed
         }
 
-        guard let cg = ciContext.createCGImage(processed, from: processed.extent) else {
-            return image
+        return ciContext.createCGImage(processed, from: processed.extent)
+    }
+
+    private func uprightJPEG(cgImage: CGImage, orientation: CGImagePropertyOrientation) -> Data? {
+        let upright = CIImage(cgImage: cgImage).oriented(orientation)
+        guard let uprightCG = ciContext.createCGImage(upright, from: upright.extent) else {
+            return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.7)
         }
-        return UIImage(cgImage: cg)
+        return UIImage(cgImage: uprightCG).jpegData(compressionQuality: 0.7)
     }
 
     private static func toTextBoxes(_ observations: [VNRecognizedTextObservation]) -> [TextBox] {

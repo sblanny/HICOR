@@ -35,6 +35,26 @@ final class CloudKitServiceTests: XCTestCase {
         XCTAssertTrue(restored.pdManualEntry)
         XCTAssertTrue(restored.consistencyWarningOverridden)
         XCTAssertEqual(restored.deviceID, "device-xyz")
+        XCTAssertTrue(restored.photoData.isEmpty, "CloudKit payload is metadata-only; photos are local-only in v1")
+    }
+
+    func testPhotoDataIsNotIncludedInCKRecord() {
+        let bigPhoto = Data(repeating: 0xFF, count: 800_000)
+        let p = PatientRefraction(
+            patientNumber: "99",
+            sessionDate: Date(),
+            sessionLocation: "L",
+            rawReadingsData: Data("[]".utf8),
+            photoData: [bigPhoto, bigPhoto, bigPhoto]
+        )
+        let record = CloudKitService.makeRecord(from: p)
+        // No field on the record should carry photo bytes.
+        for key in record.allKeys() {
+            if let data = record[key] as? Data {
+                XCTAssertLessThan(data.count, 100_000, "Field \(key) looks like a photo — CloudKit records are metadata-only in v1")
+            }
+            XCTAssertNil(record[key] as? CKAsset, "Field \(key) is a CKAsset — photos are local-only in v1")
+        }
     }
 
     func testSaveRecordReturnsCloudKitRecordID() async throws {
