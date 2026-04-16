@@ -24,6 +24,3 @@ Package.resolved
 
 # Claude Code working directory
 .claude/
-
-# Local artifacts not yet integrated
-AppIcon.appiconset.zip
