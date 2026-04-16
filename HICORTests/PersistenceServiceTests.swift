@@ -42,4 +42,19 @@ final class PersistenceServiceTests: XCTestCase {
         XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results.first?.patientNumber, "777")
     }
+
+    func testFetchUnsyncedReturnsOnlyUnsyncedRecords() throws {
+        let synced = PatientRefraction(patientNumber: "S", sessionDate: Date(), sessionLocation: "L")
+        let unsynced = PatientRefraction(patientNumber: "U", sessionDate: Date(), sessionLocation: "L")
+        service.insert(synced)
+        service.insert(unsynced)
+
+        synced.syncedToCloud = true
+        synced.cloudKitRecordID = "rec-synced"
+        try service.save()
+
+        let results = service.fetchUnsynced()
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.patientNumber, "U")
+    }
 }

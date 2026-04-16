@@ -47,4 +47,15 @@ final class PersistenceService {
         let descriptor = FetchDescriptor<PatientRefraction>(predicate: predicate)
         return (try? context.fetch(descriptor))?.first
     }
+
+    func fetchUnsynced() -> [PatientRefraction] {
+        let descriptor = FetchDescriptor<PatientRefraction>(
+            predicate: #Predicate { $0.syncedToCloud == false }
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    func save() throws {
+        try context.save()
+    }
 }

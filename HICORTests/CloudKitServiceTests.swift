@@ -37,28 +37,66 @@ final class CloudKitServiceTests: XCTestCase {
         XCTAssertEqual(restored.deviceID, "device-xyz")
     }
 
-    func testSaveThrowsNotImplemented() async {
-        let service = CloudKitService()
+    func testSaveRecordSetsCloudKitRecordID() async throws {
+        let mock = MockCKDatabase()
+        let returnedRecord = CKRecord(
+            recordType: CloudKitService.recordType,
+            recordID: CKRecord.ID(recordName: "rec-abc")
+        )
+        mock.saveBehavior = .returnRecord(returnedRecord)
+        let service = CloudKitService(database: mock)
+
         let p = PatientRefraction(patientNumber: "1", sessionDate: Date(), sessionLocation: "L")
-        do {
-            try await service.saveRecord(p)
-            XCTFail("Expected notImplementedInPhase1 error")
-        } catch CloudKitService.ServiceError.notImplementedInPhase1 {
-            // expected
-        } catch {
-            XCTFail("Wrong error: \(error)")
-        }
+        XCTAssertFalse(p.syncedToCloud)
+        XCTAssertNil(p.cloudKitRecordID)
+
+        try await service.saveRecord(p)
+
+        XCTAssertEqual(p.cloudKitRecordID, "rec-abc")
+        XCTAssertTrue(p.syncedToCloud)
+        XCTAssertEqual(mock.savedRecords.count, 1)
     }
 
-    func testFetchThrowsNotImplemented() async {
-        let service = CloudKitService()
+    func testSaveRecordPropagatesError() async {
+        let mock = MockCKDatabase()
+        mock.saveBehavior = .throwError(CKError(.networkUnavailable))
+        let service = CloudKitService(database: mock)
+
+        let p = PatientRefraction(patientNumber: "1", sessionDate: Date(), sessionLocation: "L")
+
         do {
-            _ = try await service.fetchRecords(for: Date())
-            XCTFail("Expected notImplementedInPhase1 error")
-        } catch CloudKitService.ServiceError.notImplementedInPhase1 {
-            // expected
+            try await service.saveRecord(p)
+            XCTFail("Expected CKError to propagate")
+        } catch let error as CKError {
+            XCTAssertEqual(error.code, .networkUnavailable)
         } catch {
-            XCTFail("Wrong error: \(error)")
+            XCTFail("Wrong error type: \(error)")
         }
+
+        XCTAssertFalse(p.syncedToCloud)
+        XCTAssertNil(p.cloudKitRecordID)
+    }
+
+    func testFetchRecordsReturnsConvertedRefractions() async throws {
+        let mock = MockCKDatabase()
+        let pA = PatientRefraction(patientNumber: "A", sessionDate: Date(), sessionLocation: "L")
+        let pB = PatientRefraction(patientNumber: "B", sessionDate: Date(), sessionLocation: "L")
+        mock.queryRecords = [
+            CloudKitService.makeRecord(from: pA),
+            CloudKitService.makeRecord(from: pB)
+        ]
+        let service = CloudKitService(database: mock)
+
+        let results = try await service.fetchRecords(for: Date())
+
+        XCTAssertEqual(results.count, 2)
+        let numbers = Set(results.map { $0.patientNumber })
+        XCTAssertEqual(numbers, ["A", "B"])
+        XCTAssertEqual(mock.queryCount, 1)
+    }
+
+    func testSyncPendingIsNoOp() async {
+        let service = CloudKitService(database: MockCKDatabase())
+        await service.syncPending()
     }
 }

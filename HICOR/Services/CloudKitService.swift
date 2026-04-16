@@ -1,6 +1,21 @@
 import Foundation
 import CloudKit
 
+protocol CKDatabaseProtocol {
+    func save(_ record: CKRecord) async throws -> CKRecord
+    func records(
+        matching query: CKQuery,
+        inZoneWith zoneID: CKRecordZone.ID?,
+        desiredKeys: [CKRecord.FieldKey]?,
+        resultsLimit: Int
+    ) async throws -> (
+        matchResults: [(CKRecord.ID, Result<CKRecord, Error>)],
+        queryCursor: CKQueryOperation.Cursor?
+    )
+}
+
+extension CKDatabase: CKDatabaseProtocol {}
+
 final class CloudKitService {
     static let shared = CloudKitService()
 
@@ -9,6 +24,16 @@ final class CloudKitService {
     }
 
     static let recordType = "PatientRefraction"
+
+    private let injectedDatabase: CKDatabaseProtocol?
+    private lazy var database: CKDatabaseProtocol = {
+        if let injected = injectedDatabase { return injected }
+        return CKContainer(identifier: Constants.cloudKitContainerID).publicCloudDatabase
+    }()
+
+    init(database: CKDatabaseProtocol? = nil) {
+        self.injectedDatabase = database
+    }
 
     static func makeRecord(from p: PatientRefraction) -> CKRecord {
         let record = CKRecord(recordType: recordType)
@@ -62,14 +87,37 @@ final class CloudKitService {
     }
 
     func saveRecord(_ refraction: PatientRefraction) async throws {
-        throw ServiceError.notImplementedInPhase1
+        let record = CloudKitService.makeRecord(from: refraction)
+        let saved = try await database.save(record)
+        refraction.cloudKitRecordID = saved.recordID.recordName
+        refraction.syncedToCloud = true
     }
 
     func fetchRecords(for date: Date) async throws -> [PatientRefraction] {
-        throw ServiceError.notImplementedInPhase1
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: date)
+        let end = cal.date(byAdding: .day, value: 1, to: start)!
+        let predicate = NSPredicate(
+            format: "sessionDate >= %@ AND sessionDate < %@",
+            start as NSDate, end as NSDate
+        )
+        let query = CKQuery(recordType: CloudKitService.recordType, predicate: predicate)
+        query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+        let (matches, _) = try await database.records(
+            matching: query,
+            inZoneWith: nil,
+            desiredKeys: nil,
+            resultsLimit: CKQueryOperation.maximumResults
+        )
+        return matches.compactMap { _, result in
+            switch result {
+            case .success(let record): return CloudKitService.makeRefraction(from: record)
+            case .failure: return nil
+            }
+        }
     }
 
     func syncPending() async {
-        // No-op in Phase 1.
+        // Background sync implemented in Phase 3
     }
 }

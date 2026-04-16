@@ -18,6 +18,7 @@ struct HICORApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(SyncCoordinator.shared)
         }
         .modelContainer(sharedModelContainer)
     }
