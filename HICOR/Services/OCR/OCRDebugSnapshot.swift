@@ -9,6 +9,27 @@ struct OCRDebugSnapshot: Codable, Equatable {
         let columnBasedFormat: String
         let chosenStrategy: String
         let parseError: String?
+        let preprocessedImageData: Data?
+
+        init(
+            photoIndex: Int,
+            rowBasedLines: [String],
+            rowBasedFormat: String,
+            columnBasedLines: [String],
+            columnBasedFormat: String,
+            chosenStrategy: String,
+            parseError: String?,
+            preprocessedImageData: Data? = nil
+        ) {
+            self.photoIndex = photoIndex
+            self.rowBasedLines = rowBasedLines
+            self.rowBasedFormat = rowBasedFormat
+            self.columnBasedLines = columnBasedLines
+            self.columnBasedFormat = columnBasedFormat
+            self.chosenStrategy = chosenStrategy
+            self.parseError = parseError
+            self.preprocessedImageData = preprocessedImageData
+        }
     }
     let entries: [Entry]
     let overallError: String

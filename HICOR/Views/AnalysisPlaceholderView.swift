@@ -147,7 +147,8 @@ struct AnalysisPlaceholderView: View {
                     columnBasedLines: [],
                     columnBasedFormat: "unknown",
                     chosenStrategy: "none",
-                    parseError: "Vision extraction failed: \(error.localizedDescription)"
+                    parseError: "Vision extraction failed: \(error.localizedDescription)",
+                    preprocessedImageData: nil
                 ))
                 continue
             }
@@ -190,7 +191,8 @@ struct AnalysisPlaceholderView: View {
                     columnBasedLines: extracted.columnBased,
                     columnBasedFormat: columnFormat,
                     chosenStrategy: strategy,
-                    parseError: nil
+                    parseError: nil,
+                    preprocessedImageData: extracted.preprocessedImageData
                 ))
             } else {
                 let err = OCRService.OCRError.unrecognizedFormat
@@ -210,7 +212,8 @@ struct AnalysisPlaceholderView: View {
                     columnBasedLines: extracted.columnBased,
                     columnBasedFormat: columnFormat,
                     chosenStrategy: "none",
-                    parseError: parseError
+                    parseError: parseError,
+                    preprocessedImageData: extracted.preprocessedImageData
                 ))
             }
         }

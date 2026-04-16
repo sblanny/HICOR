@@ -1,3 +1,5 @@
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import Foundation
 import UIKit
 import Vision
@@ -12,6 +14,13 @@ struct TextBox: Equatable {
 struct ExtractedText: Equatable {
     let rowBased: [String]
     let columnBased: [String]
+    let preprocessedImageData: Data?
+
+    init(rowBased: [String], columnBased: [String], preprocessedImageData: Data? = nil) {
+        self.rowBased = rowBased
+        self.columnBased = columnBased
+        self.preprocessedImageData = preprocessedImageData
+    }
 
     static let empty = ExtractedText(rowBased: [], columnBased: [])
 }
@@ -30,8 +39,19 @@ final class VisionTextExtractor: TextExtracting {
     static let defaultRowTolerance: CGFloat = 0.02
     static let defaultColumnGapThreshold: CGFloat = 0.08
 
+    private static let customWords: [String] = [
+        "SPH", "CYL", "AX", "AQ", "REF", "PD", "VD", "AVG",
+        "[R]", "[L]", "<R>", "<L>",
+        "Name", "No"
+    ]
+
+    private let ciContext = CIContext(options: nil)
+
     func extractText(from image: UIImage) async throws -> ExtractedText {
-        guard let cgImage = image.cgImage else {
+        let preprocessed = preprocessForOCR(image)
+        let preprocessedJPEG = preprocessed.jpegData(compressionQuality: 0.7)
+
+        guard let cgImage = preprocessed.cgImage ?? image.cgImage else {
             throw VisionTextExtractorError.missingCGImage
         }
         return try await withCheckedThrowingContinuation { continuation in
@@ -44,12 +64,19 @@ final class VisionTextExtractor: TextExtracting {
                 let boxes = Self.toTextBoxes(observations)
                 continuation.resume(returning: ExtractedText(
                     rowBased: Self.reconstructRows(from: boxes),
-                    columnBased: Self.reconstructColumnarLines(from: boxes)
+                    columnBased: Self.reconstructColumnarLines(from: boxes),
+                    preprocessedImageData: preprocessedJPEG
                 ))
             }
             request.recognitionLevel = .accurate
             request.recognitionLanguages = ["en-US"]
             request.usesLanguageCorrection = false
+            request.customWords = Self.customWords
+            request.minimumTextHeight = 0.01
+            if #available(iOS 16.0, *) {
+                request.automaticallyDetectsLanguage = false
+                request.revision = VNRecognizeTextRequestRevision3
+            }
 
             let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up, options: [:])
             do {
@@ -58,6 +85,33 @@ final class VisionTextExtractor: TextExtracting {
                 continuation.resume(throwing: VisionTextExtractorError.visionFailed(error))
             }
         }
+    }
+
+    private func preprocessForOCR(_ image: UIImage) -> UIImage {
+        guard let cgInput = image.cgImage else { return image }
+        let ciImage = CIImage(cgImage: cgInput)
+
+        var processed = ciImage.transformed(by: CGAffineTransform(scaleX: 2.0, y: 2.0))
+
+        if let filter = CIFilter(name: "CIColorControls") {
+            filter.setValue(processed, forKey: kCIInputImageKey)
+            filter.setValue(0.0, forKey: kCIInputSaturationKey)
+            filter.setValue(1.8, forKey: kCIInputContrastKey)
+            filter.setValue(0.05, forKey: kCIInputBrightnessKey)
+            processed = filter.outputImage ?? processed
+        }
+
+        if let sharp = CIFilter(name: "CIUnsharpMask") {
+            sharp.setValue(processed, forKey: kCIInputImageKey)
+            sharp.setValue(0.7, forKey: kCIInputIntensityKey)
+            sharp.setValue(2.5, forKey: "inputRadius")
+            processed = sharp.outputImage ?? processed
+        }
+
+        guard let cg = ciContext.createCGImage(processed, from: processed.extent) else {
+            return image
+        }
+        return UIImage(cgImage: cg)
     }
 
     private static func toTextBoxes(_ observations: [VNRecognizedTextObservation]) -> [TextBox] {

@@ -42,6 +42,20 @@ struct OCRDebugView: View {
                     .background(.tint.opacity(0.15), in: Capsule())
             }
 
+            if let data = entry.preprocessedImageData, let uiImage = UIImage(data: data) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Preprocessed image (what Vision saw)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.black.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+
             if let parseError = entry.parseError {
                 Text(parseError)
                     .font(.caption)
