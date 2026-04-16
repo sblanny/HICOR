@@ -16,6 +16,10 @@ final class OCRService {
         self.extractor = extractor
     }
 
+    func extractText(from image: UIImage) async throws -> [String] {
+        try await extractor.extractText(from: image)
+    }
+
     func processImage(_ image: UIImage, photoIndex: Int = 0) async throws -> PrintoutResult {
         let lines = try await extractor.extractText(from: image)
         guard !lines.isEmpty else { throw OCRError.noTextFound }

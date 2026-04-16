@@ -9,13 +9,16 @@ struct AnalysisPlaceholderView: View {
     let pdManualEntry: Bool
 
     @Environment(OCRService.self) private var ocr
+    @Environment(SyncCoordinator.self) private var sync
     @Environment(\.dismiss) private var dismiss
 
     @State private var phase: Phase = .running
     @State private var hardBlockAlert: AlertContent?
     @State private var overridableAlert: AlertContent?
-    @State private var errorAlert: AlertContent?
+    @State private var errorAlert: ErrorAlertContent?
     @State private var navigation: NavigationPayload?
+    @State private var debugSnapshot: OCRDebugSnapshot?
+    @State private var showDebugSheet: Bool = false
 
     private enum Phase {
         case running
@@ -26,6 +29,12 @@ struct AnalysisPlaceholderView: View {
     private struct AlertContent: Identifiable {
         let id = UUID()
         let message: String
+    }
+
+    private struct ErrorAlertContent: Identifiable {
+        let id = UUID()
+        let message: String
+        let snapshot: OCRDebugSnapshot?
     }
 
     private struct NavigationPayload {
@@ -69,11 +78,30 @@ struct AnalysisPlaceholderView: View {
             )
         }
         .alert(item: $errorAlert) { content in
-            Alert(
-                title: Text("Could not read printouts"),
-                message: Text(content.message),
-                dismissButton: .default(Text("Back to Photos")) { dismiss() }
-            )
+            if content.snapshot != nil {
+                return Alert(
+                    title: Text("Could not read printouts"),
+                    message: Text(content.message),
+                    primaryButton: .default(Text("Show Debug Info")) {
+                        showDebugSheet = true
+                    },
+                    secondaryButton: .cancel(Text("Back to Photos")) { dismiss() }
+                )
+            } else {
+                return Alert(
+                    title: Text("Could not read printouts"),
+                    message: Text(content.message),
+                    dismissButton: .default(Text("Back to Photos")) { dismiss() }
+                )
+            }
+        }
+        .sheet(isPresented: $showDebugSheet) {
+            if let snapshot = debugSnapshot {
+                OCRDebugView(snapshot: snapshot) {
+                    showDebugSheet = false
+                    dismiss()
+                }
+            }
         }
         .navigationDestination(isPresented: Binding(
             get: { phase == .advancing && navigation != nil },
@@ -91,20 +119,71 @@ struct AnalysisPlaceholderView: View {
     private func runOCR() async {
         let images = photos.compactMap { UIImage(data: $0) }
         guard !images.isEmpty else {
-            errorAlert = AlertContent(message: "No usable photos were captured.")
+            presentError("No usable photos were captured.", snapshot: nil)
             return
         }
 
-        let results: [PrintoutResult]
-        do {
-            results = try await ocr.processImages(images)
-        } catch {
-            errorAlert = AlertContent(message: humanReadable(error))
-            return
+        var results: [PrintoutResult] = []
+        var debugEntries: [OCRDebugSnapshot.Entry] = []
+        var firstError: Error?
+
+        for (index, image) in images.enumerated() {
+            let lines: [String]
+            do {
+                lines = try await ocr.extractText(from: image)
+            } catch {
+                firstError = firstError ?? error
+                debugEntries.append(.init(
+                    photoIndex: index,
+                    extractedLines: [],
+                    detectedFormat: "unknown",
+                    parseError: "Vision extraction failed: \(error.localizedDescription)"
+                ))
+                continue
+            }
+
+            let detection = PrintoutParser.detect(lines: lines)
+            let detectedString = formatName(detection)
+
+            if lines.isEmpty {
+                firstError = firstError ?? OCRService.OCRError.noTextFound
+                debugEntries.append(.init(
+                    photoIndex: index,
+                    extractedLines: lines,
+                    detectedFormat: detectedString,
+                    parseError: "Vision returned no text."
+                ))
+                continue
+            }
+
+            do {
+                let parsed = try PrintoutParser.parse(lines: lines, photoIndex: index)
+                results.append(parsed)
+                debugEntries.append(.init(
+                    photoIndex: index,
+                    extractedLines: lines,
+                    detectedFormat: detectedString,
+                    parseError: nil
+                ))
+            } catch {
+                firstError = firstError ?? error
+                debugEntries.append(.init(
+                    photoIndex: index,
+                    extractedLines: lines,
+                    detectedFormat: detectedString,
+                    parseError: "Parse failed: \(humanReadable(error))"
+                ))
+            }
         }
 
-        guard hasAnyReading(in: results) else {
-            errorAlert = AlertContent(message: "No SPH/CYL/AX readings could be extracted from the photos. Retake them with better focus and lighting.")
+        let allParsed = firstError == nil
+        let anyReading = results.contains { $0.rightEye != nil || $0.leftEye != nil }
+
+        if !allParsed || !anyReading {
+            let baseMessage = firstError.map(humanReadable) ?? "No SPH/CYL/AX readings could be extracted from the photos. Retake them with better focus and lighting."
+            let snapshot = OCRDebugSnapshot(entries: debugEntries, overallError: baseMessage)
+            await persistFailure(snapshot: snapshot)
+            presentError(baseMessage, snapshot: snapshot)
             return
         }
 
@@ -139,8 +218,31 @@ struct AnalysisPlaceholderView: View {
         }
     }
 
-    private func hasAnyReading(in results: [PrintoutResult]) -> Bool {
-        results.contains { $0.rightEye != nil || $0.leftEye != nil }
+    private func presentError(_ message: String, snapshot: OCRDebugSnapshot?) {
+        debugSnapshot = snapshot
+        errorAlert = ErrorAlertContent(message: message, snapshot: snapshot)
+    }
+
+    private func persistFailure(snapshot: OCRDebugSnapshot) async {
+        let encoded = (try? JSONEncoder().encode(snapshot)) ?? Data()
+        let failureRecord = PatientRefraction(
+            patientNumber: patientNumber,
+            sessionDate: sessionContext.date,
+            sessionLocation: sessionContext.location,
+            pd: pd,
+            pdManualEntry: pdManualEntry,
+            rawReadingsData: encoded,
+            photoData: photos
+        )
+        await sync.save(failureRecord)
+    }
+
+    private func formatName(_ detection: PrintoutFormatDetectionResult) -> String {
+        switch detection {
+        case .desktop: return "desktop"
+        case .handheld: return "handheld"
+        case .unknown: return "unknown"
+        }
     }
 
     private func humanReadable(_ error: Error) -> String {
@@ -157,4 +259,3 @@ struct AnalysisPlaceholderView: View {
         return error.localizedDescription
     }
 }
-
