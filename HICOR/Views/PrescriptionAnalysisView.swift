@@ -65,18 +65,28 @@ struct PrescriptionAnalysisView: View {
                     .background(.tint.opacity(0.15), in: Capsule())
             }
 
-            if let right = result.rightEye {
-                eyeSection(label: "Right (OD)", reading: right, starConfidence: result.handheldStarConfidenceRight)
-            }
-            if let left = result.leftEye {
-                eyeSection(label: "Left (OS)", reading: left, starConfidence: result.handheldStarConfidenceLeft)
-            }
+            eyeSectionOrPlaceholder(label: "Right (OD)", reading: result.rightEye, starConfidence: result.handheldStarConfidenceRight)
+            eyeSectionOrPlaceholder(label: "Left (OS)", reading: result.leftEye, starConfidence: result.handheldStarConfidenceLeft)
             if let pd = result.pd {
                 Text("PD: \(Int(pd)) mm").font(.caption)
             }
         }
         .padding()
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func eyeSectionOrPlaceholder(label: String, reading: EyeReading?, starConfidence: Int?) -> some View {
+        if let r = reading, !r.readings.isEmpty {
+            eyeSection(label: label, reading: r, starConfidence: starConfidence)
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label).font(.subheadline.weight(.semibold))
+                Text("No readings captured")
+                    .font(.caption.italic())
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func eyeSection(label: String, reading: EyeReading, starConfidence: Int?) -> some View {

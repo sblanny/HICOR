@@ -49,9 +49,10 @@ final class OCRService {
             return c
         }
 
-        if let r = rowAttempt { return r }
-        if let c = colAttempt { return c }
-        throw OCRError.unrecognizedFormat
+        if rowAttempt == nil && colAttempt == nil {
+            throw OCRError.unrecognizedFormat
+        }
+        throw OCRError.insufficientReadings
     }
 
     static func readingCount(_ result: PrintoutResult) -> Int {

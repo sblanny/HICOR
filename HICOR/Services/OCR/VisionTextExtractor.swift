@@ -102,6 +102,59 @@ final class VisionTextExtractor: TextExtracting {
 
     static func reconstructColumnarLines(
         from boxes: [TextBox],
+        columnGapThreshold: CGFloat = defaultColumnGapThreshold,
+        rowTolerance: CGFloat = defaultRowTolerance
+    ) -> [String] {
+        let rMarker = boxes.first { $0.text.contains("[R]") || $0.text.contains("<R>") }
+        let lMarker = boxes.first { $0.text.contains("[L]") || $0.text.contains("<L>") }
+
+        guard let r = rMarker, let l = lMarker, r.midY > l.midY else {
+            return reconstructColumnsInSection(boxes, columnGapThreshold: columnGapThreshold)
+        }
+
+        let starsByYDesc = boxes.filter { $0.text.hasPrefix("*") }.sorted { $0.midY > $1.midY }
+        let firstStar = starsByYDesc.first { $0.midY < r.midY && $0.midY > l.midY }
+        let secondStar = starsByYDesc.first { $0.midY < l.midY }
+
+        var output: [String] = []
+
+        let preBoxes = boxes.filter { $0.midY > r.midY }
+        if !preBoxes.isEmpty {
+            output.append(contentsOf: reconstructColumnsInSection(preBoxes, columnGapThreshold: columnGapThreshold))
+        }
+
+        output.append("[R]")
+        let rightLowerBound = firstStar?.midY ?? l.midY
+        let rightDataBoxes = boxes.filter { box in
+            box != r && box.midY < r.midY && box.midY > rightLowerBound
+        }
+        output.append(contentsOf: reconstructColumnsInSection(rightDataBoxes, columnGapThreshold: columnGapThreshold))
+        if let star = firstStar {
+            output.append(rowAroundY(in: boxes, y: star.midY, tolerance: rowTolerance))
+        }
+
+        output.append("[L]")
+        let leftLowerBound = secondStar?.midY ?? -1.0
+        let leftDataBoxes = boxes.filter { box in
+            box != l && box.midY < l.midY && box.midY > leftLowerBound
+        }
+        output.append(contentsOf: reconstructColumnsInSection(leftDataBoxes, columnGapThreshold: columnGapThreshold))
+        if let star = secondStar {
+            output.append(rowAroundY(in: boxes, y: star.midY, tolerance: rowTolerance))
+        }
+
+        return output
+    }
+
+    private static func rowAroundY(in boxes: [TextBox], y: CGFloat, tolerance: CGFloat) -> String {
+        boxes.filter { abs($0.midY - y) < tolerance }
+             .sorted { $0.minX < $1.minX }
+             .map(\.text)
+             .joined(separator: "  ")
+    }
+
+    static func reconstructColumnsInSection(
+        _ boxes: [TextBox],
         columnGapThreshold: CGFloat = defaultColumnGapThreshold
     ) -> [String] {
         guard !boxes.isEmpty else { return [] }

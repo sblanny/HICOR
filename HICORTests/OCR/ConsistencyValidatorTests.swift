@@ -49,4 +49,14 @@ final class ConsistencyValidatorTests: XCTestCase {
         XCTAssertEqual(outcome.result, .warningOverridable)
         XCTAssertNotNil(outcome.message)
     }
+
+    func testSignMismatchSkippedWhenOneEyeBlind() {
+        // Right eye populated with + SPH, left eye blind (nil EyeReading).
+        // Without a left eye, there is no sign to mismatch against — should be .ok.
+        let rRight = [RawReading(id: UUID(), sph: +1.50, cyl: -0.50, ax: 90, eye: .right, sourcePhotoIndex: 0)]
+        let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
+        let result = PrintoutResult(rightEye: right, leftEye: nil, pd: nil, machineType: .handheld, sourcePhotoIndex: 0, rawText: "")
+        let outcome = ConsistencyValidator().validate([result], photoCount: 2)
+        XCTAssertEqual(outcome.result, .ok, "Blind-eye cases must not trigger sign mismatch")
+    }
 }

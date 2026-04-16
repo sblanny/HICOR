@@ -64,4 +64,30 @@ final class HandheldFormatParserTests: XCTestCase {
         let result = HandheldFormatParser.parse(lines: lines, photoIndex: 0)
         XCTAssertNil(result.pd, "Handheld printouts have no PD line")
     }
+
+    func testRightEyeOnlyFixtureParses() {
+        let lines = OCRFixture.load("handheld_right_eye_only")
+        let result = HandheldFormatParser.parse(lines: lines, photoIndex: 0)
+
+        XCTAssertEqual(result.machineType, .handheld)
+        XCTAssertEqual(result.rightEye?.readings.count, 6)
+        XCTAssertEqual(result.rightEye?.machineAvgSPH, -2.00)
+        XCTAssertEqual(result.rightEye?.machineAvgCYL, -0.50)
+        XCTAssertEqual(result.rightEye?.machineAvgAX, 90)
+        XCTAssertEqual(result.handheldStarConfidenceRight, 5)
+        XCTAssertNil(result.leftEye, "Blind left eye should yield nil EyeReading")
+    }
+
+    func testLeftEyeOnlyFixtureParses() {
+        let lines = OCRFixture.load("handheld_left_eye_only")
+        let result = HandheldFormatParser.parse(lines: lines, photoIndex: 0)
+
+        XCTAssertEqual(result.machineType, .handheld)
+        XCTAssertNil(result.rightEye, "Blind right eye should yield nil EyeReading")
+        XCTAssertEqual(result.leftEye?.readings.count, 4)
+        XCTAssertEqual(result.leftEye?.machineAvgSPH, -1.50)
+        XCTAssertEqual(result.leftEye?.machineAvgCYL, -0.25)
+        XCTAssertEqual(result.leftEye?.machineAvgAX, 85)
+        XCTAssertEqual(result.handheldStarConfidenceLeft, 5)
+    }
 }

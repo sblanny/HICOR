@@ -39,6 +39,23 @@ final class OCRServiceTests: XCTestCase {
         }
     }
 
+    func testInsufficientReadingsThrownWhenBothEyesEmpty() async {
+        // Handheld format recognized (-REF- present) but both eye sections empty.
+        let emptyHandheld = ["No. 099", "VD: 13.5", "-REF-", "[R]", "[L]"]
+        let stub = StubExtractor()
+        stub.nextResults = [ExtractedText(rowBased: emptyHandheld, columnBased: emptyHandheld)]
+        let service = OCRService(extractor: stub)
+
+        do {
+            _ = try await service.processImages([UIImage()])
+            XCTFail("Expected throw")
+        } catch let error as OCRService.OCRError {
+            XCTAssertEqual(error, .insufficientReadings)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     func testColumnBasedFallbackUsedWhenRowBasedYieldsNothing() async throws {
         let stub = StubExtractor()
         stub.nextResults = [ExtractedText(
