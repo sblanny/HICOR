@@ -92,16 +92,16 @@ HICOR/
 
 Inventory is **data-driven JSON**, not hardcoded enums. The bundled `DefaultInventory.json` is the seed; the runtime can write a modified copy to the app's Documents directory and that copy takes precedence on next launch. This lets a future build mark individual lenses unavailable or extend the cylinder set without a code change.
 
-## Research Items (Light Pass)
+## Research Items
 
 | # | Question | Light pass status |
 |---|---|---|
-| 1 | Vector averaging method for SPH/CYL/AX | Light Pass Complete — Deep Pass Pending |
-| 2 | Outlier rejection threshold | Light Pass Complete — Deep Pass Pending |
-| 3 | Use of machine AVG (`*`) line | Light Pass Complete — Deep Pass Pending |
-| 4 | Lens-match rounding method | Light Pass Complete — Deep Pass Pending |
+| 1 | Vector averaging method for SPH/CYL/AX | Deep Pass Complete (Thibos M/J0/J45 equal-weight) |
+| 2 | Outlier rejection threshold | Deep Pass Complete (k=3 MAD in power-vector space + 1.00 D ANSI floor) |
+| 3 | Use of machine AVG (`*`) line | Deep Pass Complete (peer reading; handheld `*` gated on confidence ≥ 5) |
+| 4 | Lens-match rounding method | Deep Pass Complete (SE-preserving snap with cyl-distance tiebreak) |
 
-See `RESEARCH.md` for sources and tentative conclusions. Deep pass is required **before Phase 5** algorithm implementation.
+See `RESEARCH.md` for sources, light-pass conclusions, and the **✅ Final Decision** sections that lock in the algorithms for Phase 5.
 
 ## Constraints
 
