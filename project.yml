@@ -33,6 +33,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.creativearchives.hicor
         CODE_SIGN_ENTITLEMENTS: HICOR/HICOR.entitlements
+        DEVELOPMENT_TEAM: 52KA3KSGP9
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
