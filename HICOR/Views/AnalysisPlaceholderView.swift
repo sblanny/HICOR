@@ -128,54 +128,89 @@ struct AnalysisPlaceholderView: View {
         var firstError: Error?
 
         for (index, image) in images.enumerated() {
-            let lines: [String]
+            let extracted: ExtractedText
             do {
-                lines = try await ocr.extractText(from: image)
+                extracted = try await ocr.extractText(from: image)
             } catch {
                 firstError = firstError ?? error
-                logDebug(photoIndex: index, format: "unknown", lines: [], parseResult: "Vision extraction failed: \(error.localizedDescription)")
+                logDebug(
+                    photoIndex: index,
+                    rowFormat: "unknown", rowLines: [],
+                    columnFormat: "unknown", columnLines: [],
+                    chosen: "none",
+                    parseResult: "Vision extraction failed: \(error.localizedDescription)"
+                )
                 debugEntries.append(.init(
                     photoIndex: index,
-                    extractedLines: [],
-                    detectedFormat: "unknown",
+                    rowBasedLines: [],
+                    rowBasedFormat: "unknown",
+                    columnBasedLines: [],
+                    columnBasedFormat: "unknown",
+                    chosenStrategy: "none",
                     parseError: "Vision extraction failed: \(error.localizedDescription)"
                 ))
                 continue
             }
 
-            let detection = PrintoutParser.detect(lines: lines)
-            let detectedString = formatName(detection)
+            let rowFormat = formatName(PrintoutParser.detect(lines: extracted.rowBased))
+            let columnFormat = formatName(PrintoutParser.detect(lines: extracted.columnBased))
 
-            if lines.isEmpty {
-                firstError = firstError ?? OCRService.OCRError.noTextFound
-                logDebug(photoIndex: index, format: detectedString, lines: lines, parseResult: "Vision returned no text.")
-                debugEntries.append(.init(
-                    photoIndex: index,
-                    extractedLines: lines,
-                    detectedFormat: detectedString,
-                    parseError: "Vision returned no text."
-                ))
-                continue
+            let rowAttempt = try? PrintoutParser.parse(lines: extracted.rowBased, photoIndex: index)
+            let colAttempt = try? PrintoutParser.parse(lines: extracted.columnBased, photoIndex: index)
+            let rowReadings = readingCount(rowAttempt)
+            let colReadings = readingCount(colAttempt)
+
+            let chosen: (PrintoutResult, String)?
+            if rowReadings > 0, let r = rowAttempt {
+                chosen = (r, "row-based")
+            } else if colReadings > 0, let c = colAttempt {
+                chosen = (c, "column-based")
+            } else if let r = rowAttempt {
+                chosen = (r, "row-based")
+            } else if let c = colAttempt {
+                chosen = (c, "column-based")
+            } else {
+                chosen = nil
             }
 
-            do {
-                let parsed = try PrintoutParser.parse(lines: lines, photoIndex: index)
+            if let (parsed, strategy) = chosen, parsed.rightEye != nil || parsed.leftEye != nil {
                 results.append(parsed)
-                logDebug(photoIndex: index, format: detectedString, lines: lines, parseResult: "OK (R: \(parsed.rightEye?.readings.count ?? 0) readings, L: \(parsed.leftEye?.readings.count ?? 0) readings, PD: \(parsed.pd.map { "\(Int($0))" } ?? "nil"))")
+                let resultDesc = "OK via \(strategy) (R: \(parsed.rightEye?.readings.count ?? 0) readings, L: \(parsed.leftEye?.readings.count ?? 0) readings, PD: \(parsed.pd.map { "\(Int($0))" } ?? "nil"))"
+                logDebug(
+                    photoIndex: index,
+                    rowFormat: rowFormat, rowLines: extracted.rowBased,
+                    columnFormat: columnFormat, columnLines: extracted.columnBased,
+                    chosen: strategy,
+                    parseResult: resultDesc
+                )
                 debugEntries.append(.init(
                     photoIndex: index,
-                    extractedLines: lines,
-                    detectedFormat: detectedString,
+                    rowBasedLines: extracted.rowBased,
+                    rowBasedFormat: rowFormat,
+                    columnBasedLines: extracted.columnBased,
+                    columnBasedFormat: columnFormat,
+                    chosenStrategy: strategy,
                     parseError: nil
                 ))
-            } catch {
-                firstError = firstError ?? error
-                logDebug(photoIndex: index, format: detectedString, lines: lines, parseResult: "Parse failed: \(humanReadable(error))")
+            } else {
+                let err = OCRService.OCRError.unrecognizedFormat
+                firstError = firstError ?? err
+                let parseError = "Both strategies failed to extract readings."
+                logDebug(
+                    photoIndex: index,
+                    rowFormat: rowFormat, rowLines: extracted.rowBased,
+                    columnFormat: columnFormat, columnLines: extracted.columnBased,
+                    chosen: "none",
+                    parseResult: parseError
+                )
                 debugEntries.append(.init(
                     photoIndex: index,
-                    extractedLines: lines,
-                    detectedFormat: detectedString,
-                    parseError: "Parse failed: \(humanReadable(error))"
+                    rowBasedLines: extracted.rowBased,
+                    rowBasedFormat: rowFormat,
+                    columnBasedLines: extracted.columnBased,
+                    columnBasedFormat: columnFormat,
+                    chosenStrategy: "none",
+                    parseError: parseError
                 ))
             }
         }
@@ -241,15 +276,30 @@ struct AnalysisPlaceholderView: View {
         await sync.save(failureRecord)
     }
 
-    private func logDebug(photoIndex: Int, format: String, lines: [String], parseResult: String) {
+    private func logDebug(
+        photoIndex: Int,
+        rowFormat: String, rowLines: [String],
+        columnFormat: String, columnLines: [String],
+        chosen: String,
+        parseResult: String
+    ) {
         print("=== OCR Debug: Photo \(photoIndex + 1) ===")
-        print("Detected format: \(format)")
-        print("Lines extracted (\(lines.count)):")
-        for (i, line) in lines.enumerated() {
-            print("  \(i): \(line)")
+        print("Row-based: format=\(rowFormat), \(rowLines.count) lines")
+        for (i, line) in rowLines.enumerated() {
+            print("  R\(i): \(line)")
         }
+        print("Column-based: format=\(columnFormat), \(columnLines.count) lines")
+        for (i, line) in columnLines.enumerated() {
+            print("  C\(i): \(line)")
+        }
+        print("Chosen strategy: \(chosen)")
         print("Parse result: \(parseResult)")
         print("===")
+    }
+
+    private func readingCount(_ result: PrintoutResult?) -> Int {
+        guard let r = result else { return 0 }
+        return (r.rightEye?.readings.count ?? 0) + (r.leftEye?.readings.count ?? 0)
     }
 
     private func formatName(_ detection: PrintoutFormatDetectionResult) -> String {

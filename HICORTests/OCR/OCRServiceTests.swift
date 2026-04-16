@@ -3,10 +3,10 @@ import UIKit
 @testable import HICOR
 
 final class StubExtractor: TextExtracting {
-    var nextLines: [[String]] = []
-    func extractText(from image: UIImage) async throws -> [String] {
-        guard !nextLines.isEmpty else { return [] }
-        return nextLines.removeFirst()
+    var nextResults: [ExtractedText] = []
+    func extractText(from image: UIImage) async throws -> ExtractedText {
+        guard !nextResults.isEmpty else { return .empty }
+        return nextResults.removeFirst()
     }
 }
 
@@ -14,7 +14,7 @@ final class OCRServiceTests: XCTestCase {
 
     func testProcessImagesParsesDesktopFixtureViaStubExtractor() async throws {
         let stub = StubExtractor()
-        stub.nextLines = [OCRFixture.load("desktop_standard")]
+        stub.nextResults = [ExtractedText(rowBased: OCRFixture.load("desktop_standard"), columnBased: [])]
         let service = OCRService(extractor: stub)
 
         let results = try await service.processImages([UIImage()])
@@ -26,7 +26,7 @@ final class OCRServiceTests: XCTestCase {
 
     func testGarbageInputThrowsUnrecognizedFormat() async {
         let stub = StubExtractor()
-        stub.nextLines = [["random", "noise", "nothing useful"]]
+        stub.nextResults = [ExtractedText(rowBased: ["random", "noise", "nothing useful"], columnBased: [])]
         let service = OCRService(extractor: stub)
 
         do {
@@ -37,5 +37,19 @@ final class OCRServiceTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+    func testColumnBasedFallbackUsedWhenRowBasedYieldsNothing() async throws {
+        let stub = StubExtractor()
+        stub.nextResults = [ExtractedText(
+            rowBased: ["completely garbled column-fragmented junk"],
+            columnBased: OCRFixture.load("desktop_standard")
+        )]
+        let service = OCRService(extractor: stub)
+
+        let results = try await service.processImages([UIImage()])
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results[0].machineType, .desktop)
+        XCTAssertEqual(results[0].rightEye?.readings.count, 3)
     }
 }

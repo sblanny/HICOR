@@ -30,12 +30,12 @@ struct OCRDebugView: View {
     }
 
     private func photoCard(_ entry: OCRDebugSnapshot.Entry) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Photo \(entry.photoIndex + 1)")
                     .font(.headline)
                 Spacer()
-                Text(entry.detectedFormat.uppercased())
+                Text("Chosen: \(entry.chosenStrategy)")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -48,14 +48,41 @@ struct OCRDebugView: View {
                     .foregroundStyle(.red)
             }
 
-            if entry.extractedLines.isEmpty {
-                Text("(no text extracted)")
+            strategyBlock(
+                title: "Row-based",
+                format: entry.rowBasedFormat,
+                lines: entry.rowBasedLines
+            )
+            strategyBlock(
+                title: "Column-based",
+                format: entry.columnBasedFormat,
+                lines: entry.columnBasedLines
+            )
+        }
+        .padding()
+        .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func strategyBlock(title: String, format: String, lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text("(\(format))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(lines.count) lines")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if lines.isEmpty {
+                Text("(empty)")
                     .font(.caption.italic())
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(entry.extractedLines.enumerated()), id: \.offset) { i, line in
-                        Text("\(i + 1): \(line)")
+                    ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                        Text("\(i): \(line)")
                             .font(.system(.caption, design: .monospaced))
                             .textSelection(.enabled)
                     }
@@ -65,7 +92,5 @@ struct OCRDebugView: View {
                 .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
             }
         }
-        .padding()
-        .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 12))
     }
 }
