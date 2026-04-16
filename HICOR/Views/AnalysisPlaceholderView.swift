@@ -133,6 +133,7 @@ struct AnalysisPlaceholderView: View {
                 lines = try await ocr.extractText(from: image)
             } catch {
                 firstError = firstError ?? error
+                logDebug(photoIndex: index, format: "unknown", lines: [], parseResult: "Vision extraction failed: \(error.localizedDescription)")
                 debugEntries.append(.init(
                     photoIndex: index,
                     extractedLines: [],
@@ -147,6 +148,7 @@ struct AnalysisPlaceholderView: View {
 
             if lines.isEmpty {
                 firstError = firstError ?? OCRService.OCRError.noTextFound
+                logDebug(photoIndex: index, format: detectedString, lines: lines, parseResult: "Vision returned no text.")
                 debugEntries.append(.init(
                     photoIndex: index,
                     extractedLines: lines,
@@ -159,6 +161,7 @@ struct AnalysisPlaceholderView: View {
             do {
                 let parsed = try PrintoutParser.parse(lines: lines, photoIndex: index)
                 results.append(parsed)
+                logDebug(photoIndex: index, format: detectedString, lines: lines, parseResult: "OK (R: \(parsed.rightEye?.readings.count ?? 0) readings, L: \(parsed.leftEye?.readings.count ?? 0) readings, PD: \(parsed.pd.map { "\(Int($0))" } ?? "nil"))")
                 debugEntries.append(.init(
                     photoIndex: index,
                     extractedLines: lines,
@@ -167,6 +170,7 @@ struct AnalysisPlaceholderView: View {
                 ))
             } catch {
                 firstError = firstError ?? error
+                logDebug(photoIndex: index, format: detectedString, lines: lines, parseResult: "Parse failed: \(humanReadable(error))")
                 debugEntries.append(.init(
                     photoIndex: index,
                     extractedLines: lines,
@@ -235,6 +239,17 @@ struct AnalysisPlaceholderView: View {
             photoData: photos
         )
         await sync.save(failureRecord)
+    }
+
+    private func logDebug(photoIndex: Int, format: String, lines: [String], parseResult: String) {
+        print("=== OCR Debug: Photo \(photoIndex + 1) ===")
+        print("Detected format: \(format)")
+        print("Lines extracted (\(lines.count)):")
+        for (i, line) in lines.enumerated() {
+            print("  \(i): \(line)")
+        }
+        print("Parse result: \(parseResult)")
+        print("===")
     }
 
     private func formatName(_ detection: PrintoutFormatDetectionResult) -> String {
