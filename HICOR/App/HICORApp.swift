@@ -9,6 +9,7 @@ struct HICORApp: App {
     private let cloudKit: CloudKitService
     private let syncCoordinator: SyncCoordinator
     private let backgroundSync: BackgroundSyncService
+    private let ocrService: OCRService
 
     init() {
         let container = HICORApp.makeModelContainer()
@@ -19,6 +20,7 @@ struct HICORApp: App {
         self.cloudKit = cloudKit
         self.syncCoordinator = SyncCoordinator(persistence: persistence, cloudKit: cloudKit)
         self.backgroundSync = BackgroundSyncService(persistence: persistence, cloudKit: cloudKit)
+        self.ocrService = OCRService()
 
         LensInventoryService.shared.load()
     }
@@ -27,6 +29,7 @@ struct HICORApp: App {
         WindowGroup {
             ContentView()
                 .environment(syncCoordinator)
+                .environment(ocrService)
                 .onReceive(
                     NotificationCenter.default.publisher(
                         for: UIApplication.willEnterForegroundNotification

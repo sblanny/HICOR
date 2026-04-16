@@ -25,4 +25,42 @@ final class RawReadingTests: XCTestCase {
         let r = RawReading(id: UUID(), sph: 0, cyl: 0, ax: 0, eye: .left, sourcePhotoIndex: 0)
         XCTAssertNotNil(r.id)
     }
+
+    func testLowConfidenceDefaultsToFalse() {
+        let r = RawReading(id: UUID(), sph: 0, cyl: 0, ax: 0, eye: .right, sourcePhotoIndex: 0)
+        XCTAssertFalse(r.lowConfidence)
+    }
+
+    func testLowConfidenceTrueSurvivesCodableRoundTrip() throws {
+        let original = RawReading(
+            id: UUID(),
+            sph: -3.25,
+            cyl: -1.00,
+            ax: 81,
+            eye: .right,
+            sourcePhotoIndex: 2,
+            lowConfidence: true
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RawReading.self, from: data)
+        XCTAssertTrue(decoded.lowConfidence)
+    }
+
+    func testDecodingLegacyJSONWithoutLowConfidenceDefaultsToFalse() throws {
+        let id = UUID()
+        let legacyJSON = """
+        {
+          "id": "\(id.uuidString)",
+          "sph": 1.5,
+          "cyl": -0.5,
+          "ax": 108,
+          "eye": "right",
+          "sourcePhotoIndex": 0
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(RawReading.self, from: legacyJSON)
+        XCTAssertFalse(decoded.lowConfidence)
+        XCTAssertEqual(decoded.id, id)
+        XCTAssertEqual(decoded.sph, 1.5)
+    }
 }

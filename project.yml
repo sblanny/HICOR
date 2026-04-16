@@ -49,6 +49,9 @@ targets:
     platform: iOS
     sources:
       - path: HICORTests
+    resources:
+      - path: HICORTests/OCR/Fixtures
+        optional: true
     dependencies:
       - target: HICOR
     settings:
