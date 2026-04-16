@@ -10,6 +10,7 @@ final class MockCKDatabase: CKDatabaseProtocol {
     }
 
     var saveBehavior: SaveBehavior = .echo
+    var perCallBehaviors: [SaveBehavior]?
     var queryRecords: [CKRecord] = []
     var queryError: Error?
 
@@ -18,7 +19,14 @@ final class MockCKDatabase: CKDatabaseProtocol {
 
     func save(_ record: CKRecord) async throws -> CKRecord {
         savedRecords.append(record)
-        switch saveBehavior {
+        let behavior: SaveBehavior
+        if var queue = perCallBehaviors, !queue.isEmpty {
+            behavior = queue.removeFirst()
+            perCallBehaviors = queue
+        } else {
+            behavior = saveBehavior
+        }
+        switch behavior {
         case .echo:
             return record
         case .returnRecord(let r):
