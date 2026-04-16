@@ -1,0 +1,1483 @@
+{
+  "lastUpdated" : "2026-04-16T17:17:27Z",
+  "lenses" : [
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "64AD6122-7D4E-4CD8-A2D6-8FBF099FAC88",
+      "sph" : -6
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "4180873A-C7D7-4499-94AD-962F3313B1D4",
+      "sph" : -6
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "9F580AFE-57B5-4E50-B936-320452A0F869",
+      "sph" : -6
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "DC1D78F2-F0A1-4948-AC3D-C03880BC51A3",
+      "sph" : -6
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "44FF528B-B492-418D-8B22-F800D57C2CA0",
+      "sph" : -6
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "A2880185-EF90-46F3-B3FF-16AE44295028",
+      "sph" : -5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "1A38A02B-3CAF-4FEE-8EF2-A9D90DAF326E",
+      "sph" : -5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "F72CBC93-E29A-4C60-B843-0884CB18E6CD",
+      "sph" : -5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D9361F53-2FC6-4B72-B284-0A2011D45A11",
+      "sph" : -5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "0D71021A-6DDE-422F-8014-4F2B0087E76C",
+      "sph" : -5.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "CD6AC81E-8656-4DFD-A39D-F086B0CF09CF",
+      "sph" : -5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "7E8CC661-9ED0-4392-953B-EF87EC5D1333",
+      "sph" : -5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "35150D4D-433A-454B-808C-F58796712715",
+      "sph" : -5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "BCA4AE1F-F6B0-4261-9123-44A94B6756BC",
+      "sph" : -5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "D637903C-F904-4439-AD16-529D32D67B15",
+      "sph" : -5.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "C76C68A4-CE5F-4FA8-B143-57CEE98C397E",
+      "sph" : -5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "973E927F-2F86-4BF0-A238-D8CFDF9FE9EC",
+      "sph" : -5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "A3B02B2E-0BCB-46E1-90D8-1218C6C5C7AF",
+      "sph" : -5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "621419EC-EC67-4313-9FC5-DBC14C4D7717",
+      "sph" : -5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "9AF518E1-EAE5-4D0A-ABFA-16E3E4D2A369",
+      "sph" : -5.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "086206CA-6142-4872-8A16-FEF9B08FDC92",
+      "sph" : -5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "6066681D-AB17-4653-A267-BE1049F9CC0A",
+      "sph" : -5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "B10AC20C-5622-475F-9E2B-65AFE5848A9F",
+      "sph" : -5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "A21A2035-3181-4D52-B883-A185BDD50CDA",
+      "sph" : -5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "2758A55D-8DCF-4714-BA07-82A8A402C4D6",
+      "sph" : -5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "24247771-76EC-412E-A926-914F1244DA0F",
+      "sph" : -4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "C10FBDD5-93F4-4F80-A2C2-24506A54EA38",
+      "sph" : -4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "541B4BFD-D86F-41FF-BDF6-16C0D63546EE",
+      "sph" : -4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "50530413-31BE-40C2-A36C-59AE7CDB101A",
+      "sph" : -4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "562995DE-0B85-47A1-A79B-9CBBBF2EBEC3",
+      "sph" : -4.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "5CDAE1A3-697C-4FB5-977D-2ED2EF35CB67",
+      "sph" : -4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "D3D27574-F204-4775-8756-F436FCD60F16",
+      "sph" : -4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "C55961C4-0548-40CB-A3F8-DF2C48626B1A",
+      "sph" : -4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "98558A10-F08F-41D9-AC8E-4F6D307D47E8",
+      "sph" : -4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "D3BE620E-4DB0-4413-8CE1-3B07CE562298",
+      "sph" : -4.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "F5E3AD74-AA98-4EA9-96A9-6CD6986120E7",
+      "sph" : -4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "E3E795E2-5F3F-4EA3-BC7A-8532E2F38CC1",
+      "sph" : -4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "ACBF0C3B-3FA6-47D4-8AF9-63AD79F5DD2D",
+      "sph" : -4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "540B1094-8C28-4758-BB7D-E991ACB1697A",
+      "sph" : -4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "12E86BF3-8CFC-4FBE-8680-9B54E727AE36",
+      "sph" : -4.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "1B3FA01C-14D9-479D-915D-DEE7A5AC5FEF",
+      "sph" : -4
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "702A1A03-039B-486F-A42A-F38A8F7AC9BE",
+      "sph" : -4
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "BC01075B-4F57-4E9A-899B-93EE3DC1DB29",
+      "sph" : -4
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "6E9A6D71-629D-498B-A492-9E37AE3FD072",
+      "sph" : -4
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "69C117EA-4D2E-4E0B-9BE7-9BD7EF0B11CC",
+      "sph" : -4
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "45F23F89-08BD-4534-A25B-ABF6985FC41B",
+      "sph" : -3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "C51CABE5-2438-4FDF-A92B-2563CBCE9D0C",
+      "sph" : -3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "9AA29420-806B-4A3F-82DE-F440DA4EAA8F",
+      "sph" : -3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "3EBBEEF9-0D45-4F43-A7DA-B286A05935FF",
+      "sph" : -3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "348D019B-95F6-4C82-8D85-E476E518A979",
+      "sph" : -3.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "60E2ACD5-1006-4E55-9142-ADF72213A147",
+      "sph" : -3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "6B663B67-42A7-4431-9D80-64213E8F47D1",
+      "sph" : -3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "117DC58B-3992-45B8-8A23-92A8187EF035",
+      "sph" : -3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "436C9CAD-0581-4060-9A3A-26C7E7FD9EAE",
+      "sph" : -3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "7996FFA4-FFE5-433E-86C3-907B0DD71F3B",
+      "sph" : -3.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "778133B9-3D96-4191-9D95-F18A5962A30D",
+      "sph" : -3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "6FF18A3A-7CA9-46C7-A40E-23622D64C6D5",
+      "sph" : -3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "59B5805D-6120-46D3-99D9-0B0A1DDF8813",
+      "sph" : -3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "6A6E76BA-2FC2-4A04-A89C-B044193CF905",
+      "sph" : -3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "603030E1-1967-4D05-900C-787A0A4F42E7",
+      "sph" : -3.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "F8A392AF-3987-459B-BEED-A5E2402F47C0",
+      "sph" : -3
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "C8774B40-D1A9-4DCB-9803-6E4D97512915",
+      "sph" : -3
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "C6DFFF41-1CF1-4EE9-80C1-0DFC8E85651E",
+      "sph" : -3
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "00DCF5D8-905A-45EC-A2A4-C36E1D594645",
+      "sph" : -3
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "D5351E51-C21A-41AA-976A-A537BB2776A2",
+      "sph" : -3
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "8AEBEB34-6C05-458E-ACD6-B593E75438F4",
+      "sph" : -2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "8368618E-3173-4AE6-9D50-865776073D65",
+      "sph" : -2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "C65A14F2-22B8-49AC-898C-3B5A10F0F576",
+      "sph" : -2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D5950418-65F7-437F-B614-CC23BDC0E8A1",
+      "sph" : -2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "C4EC0533-253A-40D6-A268-E35A84D5B205",
+      "sph" : -2.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "813E55D8-212C-4586-9B8A-286CD6E43878",
+      "sph" : -2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "F4601641-FD9F-4B51-9402-19806B718991",
+      "sph" : -2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "4C38C095-89AE-4C79-B005-9AD55605620B",
+      "sph" : -2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "6F014410-2486-44AA-BE35-94E445805D9D",
+      "sph" : -2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "EF2244BA-506D-46CB-A88A-2FCBB215B28C",
+      "sph" : -2.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "8212726B-C5A7-4263-AA5F-18EA3C5535DC",
+      "sph" : -2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "BD59E505-5DA6-431C-A7B9-464731A5CE78",
+      "sph" : -2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "CF2A17EC-1CCF-4033-8F12-BAC4512314AF",
+      "sph" : -2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "2E02D982-D0CB-468F-ABE0-0F53214579B6",
+      "sph" : -2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "04620E9F-ADDF-44E8-A450-CCD5EB3BFADA",
+      "sph" : -2.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "1BBD7998-3718-41D2-9DA2-403484519323",
+      "sph" : -2
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "E8D6C977-A94D-434A-8F1F-C29107A43AA5",
+      "sph" : -2
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "5391F1F4-306B-48E9-9315-F8C6314ABFC5",
+      "sph" : -2
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "7C6B59EA-995F-45A6-B868-9061EA368597",
+      "sph" : -2
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "D2174B59-3AAA-4F09-BAD4-4ABC3DFDF1DE",
+      "sph" : -2
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "FF7C1E3B-04F9-46CC-A2AB-DE2DF15E62CD",
+      "sph" : -1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "E902FCF0-A380-4C21-9675-7369C99C79D7",
+      "sph" : -1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "A2AF6225-8811-428D-9FB2-A7F036DEF34C",
+      "sph" : -1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "B36ECD65-FDE8-4A73-A6BE-E1AE7F70FAFB",
+      "sph" : -1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "8996DCB7-949D-4E42-B32D-514DDB412EE2",
+      "sph" : -1.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "E0064CB2-D8FF-471C-9D4F-806CAA645DEE",
+      "sph" : -1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "E90C6E71-58E9-4D48-B680-34A07549BC0D",
+      "sph" : -1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "CFD48D0C-88B5-48F8-AF34-1048252766EE",
+      "sph" : -1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "5079C9D9-2CF1-449C-9612-E645B8B5BE81",
+      "sph" : -1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "C7B11422-64B9-4FA6-B33C-0E207C199027",
+      "sph" : -1.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "7C6118DE-DB5B-44B1-9C8D-F12CD1D2186F",
+      "sph" : -1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "0A5CF870-793E-4B89-AAF9-CC400F281C08",
+      "sph" : -1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "BFE8C42E-E5D6-4864-97D6-8C5D7924C1E2",
+      "sph" : -1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "7AB3CCC9-4EF6-4FAC-962A-DCDFCE018CDB",
+      "sph" : -1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "D27AAEA8-E463-4D76-8C9A-3862B8222B84",
+      "sph" : -1.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "2357060F-5DB3-4B03-842D-751B26EA43F0",
+      "sph" : -1
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "67530229-02B3-4123-B21E-3B2CE1FF99C6",
+      "sph" : -1
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "8C7A3143-7E5D-4BED-929A-E490FF84E0BC",
+      "sph" : -1
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "4AC9EF1E-A8C5-46CD-B479-95A01EC3F459",
+      "sph" : -1
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "DEEAF3BC-4D8B-42D6-BF72-DCDB02587841",
+      "sph" : -1
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "F835EF6C-3D62-4735-A2F2-DCA833BA3663",
+      "sph" : -0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "1E96DDE4-A4C4-4773-AF50-550EF0A7507C",
+      "sph" : -0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "E5AAAA2F-8AB1-40D3-9803-2B9AE5A0B1F1",
+      "sph" : -0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "A73458E7-61E3-465C-B609-917A6C0931F7",
+      "sph" : -0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "F46C9B49-F5CD-4DDD-BC14-6F8D1CDEF1FC",
+      "sph" : -0.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "656DC4BC-E3BD-4B18-92E0-6895A8C83FA1",
+      "sph" : -0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "1DFE2BC9-FB0E-4AF5-9606-FF898F316D88",
+      "sph" : -0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "9ABD3417-D807-444A-BC97-E9E838B95F58",
+      "sph" : -0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "2DD7990C-04A5-444A-898D-220A3D688984",
+      "sph" : -0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "F3849AA5-5A8D-4F09-9FE5-3D9D0D1D5722",
+      "sph" : -0.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "DC3C5BD6-2342-4550-8A78-DC6AC4F63A4D",
+      "sph" : -0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "D1C3300C-F151-46BC-815F-D5FB61CD5AD7",
+      "sph" : -0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "59C9EB76-AD85-4718-AEC5-D207A86778FC",
+      "sph" : -0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "FF44F776-4DFF-4B37-9B21-AF7515AC9B64",
+      "sph" : -0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "27978854-AD69-4871-946E-D4C1A5A63E8E",
+      "sph" : -0.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "DA41F27A-EC80-4712-AAD5-2D3E42E77A95",
+      "sph" : 0
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "54729022-EB05-4F4B-938C-B0220B5C8C74",
+      "sph" : 0
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "1BFE82A3-5DD2-465B-868D-E3010BD13DF3",
+      "sph" : 0
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "2A24B50A-F389-441E-ABCC-316E69CF3D27",
+      "sph" : 0
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "DD537476-5480-4510-90E1-CC0CA730EE55",
+      "sph" : 0
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "6BCE01BD-B19E-4ECD-B601-9C248086EED8",
+      "sph" : 0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "80B38E81-A159-434D-B093-3F68BC81BD28",
+      "sph" : 0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "3270519B-DBBF-4266-BB83-B137F89AB57E",
+      "sph" : 0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "759606CA-B202-4E3F-9E97-C20137F83D38",
+      "sph" : 0.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "A9C7335F-9565-45ED-9DA5-C0C22C6B1784",
+      "sph" : 0.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "41E14697-A934-4CD5-82A7-E7DE0623A24D",
+      "sph" : 0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "F83326AB-84BD-4D5F-BE2F-4F85BCB37477",
+      "sph" : 0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "1068A73D-0C84-4AEC-8A5A-A339F082202F",
+      "sph" : 0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "5179B712-EEEB-4E9F-8B2B-1A421DC0A915",
+      "sph" : 0.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "69840EB2-B667-4D57-A74C-980392FF21D3",
+      "sph" : 0.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "2B352D1E-0965-4606-85F5-C7B97EB11BBD",
+      "sph" : 0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "C8E434E6-008A-4F06-9021-CE2BF5D471D2",
+      "sph" : 0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "02D4EFFB-1E84-42B7-8577-0365C1DFE04D",
+      "sph" : 0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "5045B3B9-7AF5-4DA8-8972-CED8EB72D879",
+      "sph" : 0.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "94BADE39-1477-4717-A35B-B8E2A55F9E49",
+      "sph" : 0.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "4D0BCAB4-16BB-4EF6-8DD7-C7AC64B2234D",
+      "sph" : 1
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "665AED53-E825-4609-8A5F-BEEB90DDFBE5",
+      "sph" : 1
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "28DEAAC5-4414-410E-A22C-A3524D7AB3F9",
+      "sph" : 1
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "F1D61631-96D5-4DF4-8ABE-285E7C0BF0AF",
+      "sph" : 1
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "4B13FBBC-4169-49B8-8D18-E2290B3A5BEC",
+      "sph" : 1
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "CD7F6640-1A59-45F7-B73A-1605F0521E29",
+      "sph" : 1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "B4AF1FEF-F900-4D6C-B8E8-EC487D7D746B",
+      "sph" : 1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "EBB5B187-AD95-47FB-8C12-C5FCB1EAE74D",
+      "sph" : 1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "FF54CE3D-3853-4C0A-A577-14B034D7B68B",
+      "sph" : 1.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "86C1E234-F984-4C6C-8291-77C74CC41846",
+      "sph" : 1.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "73494121-F6C6-48CC-A9D7-EFFF80938344",
+      "sph" : 1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "A7DD05A2-8C77-47AE-8FFB-25F3C08017D8",
+      "sph" : 1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "6DB58E35-0D7D-42D8-B719-6A4DC5235875",
+      "sph" : 1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "F11B28AA-E2F8-4BCD-9722-66C6C8C23DE0",
+      "sph" : 1.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "F8464B39-A0A3-4935-849B-C7FF858DF64D",
+      "sph" : 1.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "E7CBB150-3A98-4986-BF3B-E5789FD24A4C",
+      "sph" : 1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "8E97940D-1EA2-4815-BBD6-ED27FD1334DD",
+      "sph" : 1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "7EF7170D-5C04-4953-B026-759AFC7B22B6",
+      "sph" : 1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D92E1217-948E-4910-A337-E8E83EB390D5",
+      "sph" : 1.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "E6A6282E-04A5-483D-884D-9CD5E1C207AA",
+      "sph" : 1.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "818A1FBD-A4D6-4A24-8ADE-3577D513398B",
+      "sph" : 2
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "657EAA5F-4FBC-4BBA-9EEE-141307526CCC",
+      "sph" : 2
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "A2C5EEB0-4CEF-4FE1-BF73-90DE593EC89D",
+      "sph" : 2
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "47CED365-2443-4F90-8979-9874AD0635DA",
+      "sph" : 2
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "F042D7E9-59B1-4E87-8EE3-D6A5BB642AA6",
+      "sph" : 2
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "DD9DAF95-DFB9-4548-A305-B6EFE88808B5",
+      "sph" : 2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "33D745ED-FC82-49FC-ADB2-41A2328625B9",
+      "sph" : 2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "C66EF468-3E4A-4A77-920F-BB06FCCB45B9",
+      "sph" : 2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "FA010078-6A00-496F-AE47-43F7B497C768",
+      "sph" : 2.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "6371330B-BC0B-4EB0-9465-2FF1983C058E",
+      "sph" : 2.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "B2D0A1EC-8FFD-44FB-935A-E306E140B18F",
+      "sph" : 2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "DB38C744-862C-4BC4-977B-8205996FB686",
+      "sph" : 2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "6B43D4AC-EFB3-4C48-8A9E-AA168E482DC2",
+      "sph" : 2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D5845BB0-ACE5-48C7-BF9E-26A35C68A33C",
+      "sph" : 2.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "94ADE5D3-4ABE-42D6-A401-720610FBB2C0",
+      "sph" : 2.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "01576E41-E44F-4ECF-9A98-883BAE628EDC",
+      "sph" : 2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "E03674F0-17C2-42AA-ADDB-ADD7E9EB15ED",
+      "sph" : 2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "2E774C59-0C77-478B-9395-3C7AF938339F",
+      "sph" : 2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "B5C5F3C1-6751-46F9-8725-3216863FB368",
+      "sph" : 2.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "6CBB2499-F682-47EA-859A-CECA1806B4F8",
+      "sph" : 2.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "4F8D7648-D69D-423A-BF53-A9922DCCFCDF",
+      "sph" : 3
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "D09A974B-30C7-4E12-9982-EF5F64DA693B",
+      "sph" : 3
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "F5BE6A11-B9BA-46CA-8726-613938361F09",
+      "sph" : 3
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "2C404AD3-C2E5-4632-848D-8DD21EA10D1D",
+      "sph" : 3
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "E1959CD9-E616-434B-90DF-6DE84FCA7B43",
+      "sph" : 3
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "7B4BC586-7955-425A-8531-F7749F5E820A",
+      "sph" : 3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "695208F7-25B2-4437-A0BB-5C2550A23C39",
+      "sph" : 3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "FD578EBA-3414-461C-82D8-7D3E09DCFD91",
+      "sph" : 3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D2F2BAD4-B21D-4E6A-A820-F09F04D3A103",
+      "sph" : 3.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "41FF5A03-BDEF-4302-8FB3-A6872F1D163A",
+      "sph" : 3.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "D9F69BE9-3910-4233-B318-0D5B5D51DA14",
+      "sph" : 3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "E55AEBFE-4D69-4886-8E2C-46F5834C2E67",
+      "sph" : 3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "A8FCE409-5E2F-453B-AF0C-B7446C41F700",
+      "sph" : 3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D20D311B-1320-4EF3-9494-FF262A791DB9",
+      "sph" : 3.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "F0DFE660-EEF6-4BAA-9592-654CB8B37532",
+      "sph" : 3.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "DD68783B-2F6F-43BE-8E7E-F19FF15A6B0E",
+      "sph" : 3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "6BCDB653-248B-4699-A45D-01F847AD464F",
+      "sph" : 3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "C1B0EFC9-6AC8-42D6-BE23-1975570A315F",
+      "sph" : 3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "D0A5BACB-805F-43EA-8891-2FE1EBDA58CD",
+      "sph" : 3.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "A91CF2AA-7E11-40FC-8F69-A8F433148824",
+      "sph" : 3.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "B2A2C3F5-5F1C-42FF-ADB1-5A9FFE856A0B",
+      "sph" : 4
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "A592B005-7C51-4713-8DA9-E2A49FE3AE15",
+      "sph" : 4
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "0B7B13D8-F860-4746-A6DF-827E88BA9999",
+      "sph" : 4
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "1BF9BEFB-949E-4FD7-9F39-13021F007603",
+      "sph" : 4
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "32D1A1BE-D0C8-4D8E-8370-21C742365970",
+      "sph" : 4
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "97095347-546F-46C3-B59F-2B0A832C1FA5",
+      "sph" : 4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "4581083C-37AB-4E9F-A5B6-B46DE66F50DD",
+      "sph" : 4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "8E1BFF87-8E0B-4B96-869B-4CA1DD1A9D84",
+      "sph" : 4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "BC4CAD37-9C1B-4E1E-B845-AB78BD46F9AD",
+      "sph" : 4.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "9097C120-5742-43C4-A051-7A3C5A2EB001",
+      "sph" : 4.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "726B91F3-77C3-43A7-8D1F-60F5602E88AE",
+      "sph" : 4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "FB024AD1-6E3C-4E7E-9BC3-1C8B3826A2B4",
+      "sph" : 4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "A41E3319-0B29-4478-809B-ADB047394244",
+      "sph" : 4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "193E0B1A-6130-47F5-A819-9556E810208E",
+      "sph" : 4.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "11D44461-033A-4EB9-A794-23AFA2D70ADF",
+      "sph" : 4.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "BB577747-EC41-468E-845F-AF9DC1D2560D",
+      "sph" : 4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "8713A130-BAE8-4F09-915A-A0682CD6C49B",
+      "sph" : 4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "49243878-FD8B-4756-887E-C0270B5F1649",
+      "sph" : 4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "80246E96-5D3A-4C4A-9B01-EB446CFB9E73",
+      "sph" : 4.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "C16B0239-AFE3-44DC-8ED1-72C748A7D580",
+      "sph" : 4.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "7E889755-7095-4D74-AD40-F41156E38576",
+      "sph" : 5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "F446A1CD-986C-4F88-8D33-357C414A1E54",
+      "sph" : 5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "92976EB0-D63D-4BDB-986C-B9F0323242D0",
+      "sph" : 5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "FBADCF76-5F86-41BF-A3C4-8D47B8D350A7",
+      "sph" : 5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "7663481F-E6B9-4E93-A59A-968148E0A840",
+      "sph" : 5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "243D414F-A3D5-44FA-91AF-3DB6B82B690E",
+      "sph" : 5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "2F14E21C-DBE3-4F3F-9573-E9CF5B50496B",
+      "sph" : 5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "527A99AA-B297-4C1F-A101-518D702B0B16",
+      "sph" : 5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "B3F08669-DDAF-4644-88E4-B1ABF744D443",
+      "sph" : 5.25
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "0C6EC428-60B2-46FF-949E-201005D942BD",
+      "sph" : 5.25
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "CA9B3672-9BA1-4886-9F54-160E651AF225",
+      "sph" : 5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "2D8A02BF-29BF-4FF9-AA51-C063B2235782",
+      "sph" : 5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "9B28DA71-6ADA-4773-8830-E1271789D5EC",
+      "sph" : 5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "372E1A17-A042-4778-A24F-85B374BD3088",
+      "sph" : 5.5
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "0FA1CD37-4752-450A-8EE2-FB3321D6A51D",
+      "sph" : 5.5
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "7EC768A9-3825-45FB-A649-465E40E2D4B9",
+      "sph" : 5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "C762D5FC-9843-47DC-B6F6-C998F23BA6F8",
+      "sph" : 5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "B741D2D5-9225-4310-9557-3E1C5D9EACE6",
+      "sph" : 5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "C68099C3-7081-4716-9F0E-5F7B015A4A2C",
+      "sph" : 5.75
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "CBF48CED-11F2-4D1D-8FC2-4CCA0F38DF65",
+      "sph" : 5.75
+    },
+    {
+      "available" : true,
+      "cyl" : 0,
+      "id" : "D0F3CD41-2EDC-4DA2-8891-E887E1632C34",
+      "sph" : 6
+    },
+    {
+      "available" : true,
+      "cyl" : -0.5,
+      "id" : "C28006F5-42D8-483D-B5FA-A05C0ACCF171",
+      "sph" : 6
+    },
+    {
+      "available" : true,
+      "cyl" : -1,
+      "id" : "4460530D-02B7-4108-A618-510E6FF70A37",
+      "sph" : 6
+    },
+    {
+      "available" : true,
+      "cyl" : -1.5,
+      "id" : "879EE102-0C2A-4865-82B2-83ED7C783855",
+      "sph" : 6
+    },
+    {
+      "available" : true,
+      "cyl" : -2,
+      "id" : "3AC75FAD-41EE-413A-A8BD-6444A5B0EBFB",
+      "sph" : 6
+    }
+  ],
+  "supportedCylinders" : [
+    0,
+    -0.5,
+    -1,
+    -1.5,
+    -2
+  ],
+  "version" : "1.0"
+}
