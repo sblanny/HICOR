@@ -45,6 +45,9 @@ final class OCRServiceTests: XCTestCase {
         let batch = await service.processImages([UIImage()])
         XCTAssertNil(batch.perImage[0].printout)
         XCTAssertEqual(batch.overallError, .insufficientReadings)
+        XCTAssertNil(batch.perImage[0].winningScore?.parseErrorDescription,
+                     "Expected format recognized (parse succeeded with zero readings), got parse failure")
+        XCTAssertEqual(batch.perImage[0].winningScore?.validReadingCount, 0)
     }
 
     func testColumnBasedFallbackUsedWhenRowBasedYieldsNothing() async {
@@ -96,6 +99,34 @@ final class OCRServiceTests: XCTestCase {
         let service = OCRService(extractor: stub)
         let batch = await service.processImages([UIImage()])
         XCTAssertEqual(batch.perImage[0].winningScore?.variant, .thermalBinary)
-        XCTAssertGreaterThanOrEqual(stub.calls.count, 2)
+        // thermalBinary's desktop_standard score (~0.65) sits below the 0.85
+        // short-circuit threshold, so the pipeline sweeps every variant×revision.
+        let expectedCalls = PreprocessingVariant.allCases.count * VisionTextExtractor.revisionsToTry().count
+        XCTAssertEqual(stub.calls.count, expectedCalls,
+                       "Expected full variant×revision sweep when no variant exceeds short-circuit threshold")
+        XCTAssertEqual(stub.calls.first?.0, .standard)
+    }
+
+    func testPipelineVisitsAllVariantsWhenNoneShortCircuit() async {
+        final class AllLowScoreStub: TextExtracting {
+            var calls: [(PreprocessingVariant, Int)] = []
+            func extractText(from image: UIImage) async throws -> ExtractedText { .empty }
+            func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText {
+                calls.append((variant, revision))
+                // one-eye-only handheld → parseable but score below 0.85 ceiling
+                return ExtractedText(
+                    rowBased: ["-REF-", "[R]", "+ 1.00 - 0.25 90"],
+                    columnBased: [],
+                    preprocessedImageData: nil, boxes: [],
+                    revisionUsed: revision, variant: variant
+                )
+            }
+        }
+        let stub = AllLowScoreStub()
+        let service = OCRService(extractor: stub)
+        _ = await service.processImages([UIImage()])
+        let expectedCalls = PreprocessingVariant.allCases.count * VisionTextExtractor.revisionsToTry().count
+        XCTAssertEqual(stub.calls.count, expectedCalls,
+                       "Expected full variant×revision sweep when no variant exceeds short-circuit threshold")
     }
 }

@@ -24,6 +24,8 @@ struct OCRImageResult: Equatable {
     let winningScore: VariantScore?
     let allScores: [VariantScore]
     let rawText: String
+    let rowBasedLines: [String]
+    let columnBasedLines: [String]
     let preprocessedImageData: Data?
     let extractionErrorDescription: String?
 }
@@ -209,6 +211,8 @@ final class OCRService {
             winningScore: winningScore,
             allScores: allScores,
             rawText: winningExtraction.map { ($0.rowBased + $0.columnBased).joined(separator: "\n") } ?? "",
+            rowBasedLines: winningExtraction?.rowBased ?? [],
+            columnBasedLines: winningExtraction?.columnBased ?? [],
             preprocessedImageData: winningExtraction?.preprocessedImageData,
             extractionErrorDescription: extractionErrorDescription
         )
@@ -226,10 +230,10 @@ final class OCRService {
     private static func buildDebugEntry(_ result: OCRImageResult) -> OCRDebugSnapshot.Entry {
         OCRDebugSnapshot.Entry(
             photoIndex: result.photoIndex,
-            rowBasedLines: [],
-            rowBasedFormat: "",
-            columnBasedLines: [],
-            columnBasedFormat: "",
+            rowBasedLines: result.rowBasedLines,
+            rowBasedFormat: formatName(PrintoutParser.detect(rawLines: result.rowBasedLines)),
+            columnBasedLines: result.columnBasedLines,
+            columnBasedFormat: formatName(PrintoutParser.detect(rawLines: result.columnBasedLines)),
             chosenStrategy: result.winningScore?.reconstruction.rawValue ?? "none",
             parseError: result.winningScore?.parseErrorDescription ?? result.extractionErrorDescription,
             preprocessedImageData: result.preprocessedImageData,
@@ -237,6 +241,14 @@ final class OCRService {
             revisionUsed: result.winningScore?.revisionUsed,
             winningVariant: result.winningScore?.variant.rawValue
         )
+    }
+
+    private static func formatName(_ detection: PrintoutFormatDetectionResult) -> String {
+        switch detection {
+        case .desktop: return "desktop"
+        case .handheld: return "handheld"
+        case .unknown: return "unknown"
+        }
     }
 
     static func readingCount(_ result: PrintoutResult) -> Int {
