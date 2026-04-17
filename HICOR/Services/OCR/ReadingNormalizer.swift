@@ -24,16 +24,41 @@ enum ReadingNormalizer {
     }
 
     static func normalizeOCRString(_ raw: String) -> String {
-        var s = raw
+        let tokens = raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let normalized = tokens.map { token -> String in
+            isNumericCandidate(token) ? normalizeNumericToken(token) : token
+        }
+        return normalized.joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func isNumericCandidate(_ token: String) -> Bool {
+        let reserved: Set<String> = [
+            "SPH", "CYL", "AX", "AQ", "REF", "PD", "VD", "AVG", "GRK",
+            "[R]", "[L]", "<R>", "<L>", "E", "MM"
+        ]
+        if reserved.contains(token.uppercased()) { return false }
+
+        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S"]
+        let structural: Set<Character> = ["+", "-", ".", "*"]
+        var hasDigit = false
+        for ch in token {
+            if ch.isNumber { hasDigit = true; continue }
+            if structural.contains(ch) { continue }
+            if confusionLetters.contains(ch) { continue }
+            return false
+        }
+        return hasDigit
+    }
+
+    static func normalizeNumericToken(_ token: String) -> String {
+        var s = token
         s = s.replacingOccurrences(of: "O", with: "0")
         s = s.replacingOccurrences(of: "o", with: "0")
         s = s.replacingOccurrences(of: "l", with: "1")
         s = s.replacingOccurrences(of: "I", with: "1")
         s = s.replacingOccurrences(of: "S", with: "5")
-        s = s.replacingOccurrences(of: "B", with: "8")
-        s = s.replacingOccurrences(of: "  ", with: " ")
-        s = s.replacingOccurrences(of: "  ", with: " ")
-        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return s
     }
 
     private static func roundToQuarterDiopter(_ value: Double) -> Double {

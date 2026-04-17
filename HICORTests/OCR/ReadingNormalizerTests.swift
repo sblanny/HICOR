@@ -50,4 +50,28 @@ final class ReadingNormalizerTests: XCTestCase {
         XCTAssertEqual(ReadingNormalizer.normalizeOCRString("  +  1.50    -0.25  "), "+ 1.50 -0.25")
         XCTAssertEqual(ReadingNormalizer.normalizeOCRString("AVG    +1.50"), "AVG +1.50")
     }
+
+    func testNormalizePreservesSPHHeader() {
+        XCTAssertEqual(ReadingNormalizer.normalizeOCRString("SPH"), "SPH")
+    }
+
+    func testNormalizePreservesAQMarker() {
+        XCTAssertEqual(ReadingNormalizer.normalizeOCRString("- 2.00  - 0.50  85 AQ"), "- 2.00 - 0.50 85 AQ")
+    }
+
+    func testNormalizeFixesNumericTokenWithLetterO() {
+        XCTAssertEqual(ReadingNormalizer.normalizeOCRString("- 2.O0"), "- 2.00")
+    }
+
+    func testNormalizeLeavesLetterBUnchanged() {
+        XCTAssertEqual(ReadingNormalizer.normalizeOCRString("B"), "B")
+    }
+
+    func testNormalizePreservesREFMarker() {
+        XCTAssertEqual(ReadingNormalizer.normalizeOCRString("-REF-"), "-REF-")
+    }
+
+    func testNormalizePreservesAVGLabel() {
+        XCTAssertEqual(ReadingNormalizer.normalizeOCRString("AVG + 1.50"), "AVG + 1.50")
+    }
 }
