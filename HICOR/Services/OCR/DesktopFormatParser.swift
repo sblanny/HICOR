@@ -92,23 +92,37 @@ enum DesktopFormatParser {
                 work.removeSubrange(work.startIndex..<range.upperBound)
             }
         }
-        let tokens = combineSignTokens(work.split(whereSeparator: { $0.isWhitespace }).map(String.init))
+        let trimmed = work.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Strict shape gate: SPH alone, OR SPH + CYL + AX. Each diopter token must be
+        // a quarter-diopter decimal like "+ 1.50" or "- 21.00". Bare integers are
+        // NEVER spheres or cylinders — they are axes or OCR fragmentation garbage.
+        guard ReadingLineShape.matches(trimmed, allowQualityMarker: false) else {
+            print("Parser: rejecting desktop line '\(line)' — reason: shape mismatch")
+            return nil
+        }
+
+        let tokens = combineSignTokens(trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init))
         let numerics = tokens.filter { Double($0) != nil }
         if numerics.count >= 3,
            let sph = Double(numerics[0]),
            let cyl = Double(numerics[1]),
-           let ax  = Int(numerics[2]) {
+           let ax  = Int(numerics[2]),
+           ReadingPlausibility.isPlausibleSPH(sph),
+           ReadingPlausibility.isPlausibleCYL(cyl),
+           ReadingPlausibility.isPlausibleAX(ax) {
+            print("Parser: accepted desktop line '\(line)' as SPH=\(sph) CYL=\(cyl) AX=\(ax)")
             return (sph, cyl, ax, false)
         }
-        // Same fragmentation guard as HandheldFormatParser: SPH-only must look like
-        // a decimal sphere (has ".", in ±25 D), never a stray integer axis token.
         if allowSphOnly,
            numerics.count == 1,
            numerics[0].contains("."),
            let sph = Double(numerics[0]),
-           abs(sph) <= 25.0 {
+           ReadingPlausibility.isPlausibleSPH(sph) {
+            print("Parser: accepted desktop SPH-only line '\(line)' as SPH=\(sph)")
             return (sph, 0.0, 0, true)
         }
+        print("Parser: rejecting desktop line '\(line)' — reason: range or token count")
         return nil
     }
 

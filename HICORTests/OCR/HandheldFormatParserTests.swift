@@ -155,4 +155,33 @@ final class HandheldFormatParserTests: XCTestCase {
         XCTAssertEqual(HandheldFormatParser.parseReadingLine("- 21.00")?.sph, -21.00)
         XCTAssertEqual(HandheldFormatParser.parseReadingLine("- 21.00")?.isSphOnly, true)
     }
+
+    func testOCRGarbageLineWithLeadingIntegersRejected() {
+        // Real-world failure: Vision produced "111  25  25  -  0.25  54" — 5 of 6
+        // tokens are bare integers (axis fragments). Without strict shape gating,
+        // the old parser would accept SPH=111, CYL=25, AX=25, poisoning averages.
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("111  25  25  -  0.25  54"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("2.  25  49"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("54  108  136"))
+    }
+
+    func testCylMustBeNegativeOrZero() {
+        // Minus-cylinder convention: positive cyl is impossible from the machine.
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("- 2.00 + 0.50 90 AQ"))
+    }
+
+    func testAxisOutOfRangeRejected() {
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("- 2.00 - 0.50 200 AQ"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("- 2.00 - 0.50 0 AQ"))
+    }
+
+    func testFullTripleSphOutOfRangeRejected() {
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("- 30.00 - 0.50 90 AQ"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("+ 99.00 - 0.50 90 AQ"))
+    }
+
+    func testCylOutOfRangeRejected() {
+        // Cylinder shouldn't exceed -10 D in clinical practice.
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("- 2.00 - 15.00 90 AQ"))
+    }
 }

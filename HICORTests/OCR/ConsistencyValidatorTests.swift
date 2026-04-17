@@ -50,6 +50,26 @@ final class ConsistencyValidatorTests: XCTestCase {
         XCTAssertNotNil(outcome.message)
     }
 
+    func testImplausibleSphValuesFilteredFromSignAverage() {
+        // Defense-in-depth: even if a parser regression injects sph=+90 (an axis
+        // misread as SPH), the validator must drop it instead of letting it flip
+        // the eye's average sign and trigger a false mismatch.
+        let rRight = [
+            RawReading(id: UUID(), sph: -2.00, cyl: -0.50, ax: 90, eye: .right, sourcePhotoIndex: 0),
+            RawReading(id: UUID(), sph: -2.25, cyl: -0.50, ax: 90, eye: .right, sourcePhotoIndex: 0)
+        ]
+        let rLeft = [
+            RawReading(id: UUID(), sph: -2.00, cyl: -0.50, ax: 90, eye: .left, sourcePhotoIndex: 0),
+            RawReading(id: UUID(), sph: -2.00, cyl: -0.50, ax: 90, eye: .left, sourcePhotoIndex: 0),
+            RawReading(id: UUID(), sph: +90.0, cyl: -0.50, ax: 90, eye: .left, sourcePhotoIndex: 0)  // implausible: would flip avg
+        ]
+        let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
+        let left  = EyeReading(id: UUID(), eye: .left,  readings: rLeft,  machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
+        let result = PrintoutResult(rightEye: right, leftEye: left, pd: nil, machineType: .handheld, sourcePhotoIndex: 0, rawText: "")
+        let outcome = ConsistencyValidator().validate([result], photoCount: 3)
+        XCTAssertEqual(outcome.result, .ok, "Implausible SPH must be filtered out, leaving both eyes negative → ok")
+    }
+
     func testSphOnlyReadingsExcludedFromCylSpreadCheck() {
         // CYL placeholders on isSphOnly readings (0.0) would falsely show a 1.00 D spread
         // against a real -1.00 cyl reading. Validator must filter them out.

@@ -36,10 +36,21 @@ struct ConsistencyValidator {
     }
 
     private func signMismatch(right: [Double], left: [Double]) -> String? {
-        guard !right.isEmpty, !left.isEmpty else { return nil }
-        let rAvg = right.reduce(0, +) / Double(right.count)
-        let lAvg = left.reduce(0, +)  / Double(left.count)
-        print("ConsistencyValidator: R_avgSPH=\(rAvg) (n=\(right.count)), L_avgSPH=\(lAvg) (n=\(left.count))")
+        // Defense-in-depth: even though parsers now reject implausible SPH values,
+        // filter again here so any future parser regression cannot produce
+        // nonsense averages and false sign-mismatch alerts.
+        let plausibleRight = right.filter { ReadingPlausibility.isPlausibleSPH($0) }
+        let plausibleLeft  = left.filter  { ReadingPlausibility.isPlausibleSPH($0) }
+        if plausibleRight.count != right.count {
+            print("ConsistencyValidator: dropped \(right.count - plausibleRight.count) implausible right-eye SPH values before averaging")
+        }
+        if plausibleLeft.count != left.count {
+            print("ConsistencyValidator: dropped \(left.count - plausibleLeft.count) implausible left-eye SPH values before averaging")
+        }
+        guard !plausibleRight.isEmpty, !plausibleLeft.isEmpty else { return nil }
+        let rAvg = plausibleRight.reduce(0, +) / Double(plausibleRight.count)
+        let lAvg = plausibleLeft.reduce(0, +)  / Double(plausibleLeft.count)
+        print("ConsistencyValidator: R_avgSPH=\(rAvg) (n=\(plausibleRight.count)), L_avgSPH=\(lAvg) (n=\(plausibleLeft.count))")
         if rAvg > 0.25 && lAvg < -0.25 {
             return "right eye plus, left eye minus"
         }
@@ -54,14 +65,17 @@ struct ConsistencyValidator {
             let readings = results.compactMap { result in
                 eye == .right ? result.rightEye : result.leftEye
             }.flatMap { $0.readings }
-            guard readings.count >= 2 else { continue }
-            let sphSpread = (readings.map(\.sph).max()! - readings.map(\.sph).min()!)
+            // Filter implausible spheres so a stray sph=+90 garbage value cannot
+            // produce a 92 D fake spread. Same defense-in-depth as signMismatch.
+            let sphReadings = readings.map(\.sph).filter { ReadingPlausibility.isPlausibleSPH($0) }
+            guard sphReadings.count >= 2 else { continue }
+            let sphSpread = (sphReadings.max()! - sphReadings.min()!)
             if sphSpread > ConsistencyValidator.sphSpreadThreshold {
                 return "\(eye == .right ? "Right" : "Left") eye sphere readings vary by \(String(format: "%.2f", sphSpread)) D. Verify the printout."
             }
             // SPH-only readings carry cyl = 0.0 as a placeholder; excluding them
             // prevents false-positive spread warnings against the real cyl values.
-            let cylReadings = readings.filter { !$0.isSphOnly }.map(\.cyl)
+            let cylReadings = readings.filter { !$0.isSphOnly }.map(\.cyl).filter { ReadingPlausibility.isPlausibleCYL($0) }
             guard cylReadings.count >= 2 else { continue }
             let cylSpread = (cylReadings.max()! - cylReadings.min()!)
             if cylSpread > ConsistencyValidator.cylSpreadThreshold {
