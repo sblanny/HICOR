@@ -6,6 +6,12 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 *.xcworkspace/
+# CocoaPods generates HICOR.xcworkspace — must be tracked
+!HICOR.xcworkspace/
+HICOR.xcworkspace/xcuserdata/
+
+# CocoaPods
+Pods/
 
 # Swift Package Manager
 .build/
