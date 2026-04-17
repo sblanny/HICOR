@@ -53,12 +53,10 @@ final class MLKitTextExtractor: TextExtracting {
         }
 
         let boxes = Self.toTextBoxes(result, imageSize: image.size)
+        let rowBased = Self.nativeRowLines(from: result, imageSize: image.size)
         let thresholds = VisionTextExtractor.computeAdaptiveThresholds(from: boxes)
         return ExtractedText(
-            rowBased: VisionTextExtractor.reconstructRows(
-                from: boxes,
-                rowTolerance: thresholds.rowTolerance
-            ),
+            rowBased: rowBased,
             columnBased: VisionTextExtractor.reconstructColumnarLines(
                 from: boxes,
                 columnGapThreshold: thresholds.columnGapThreshold,
@@ -69,6 +67,31 @@ final class MLKitTextExtractor: TextExtracting {
             revisionUsed: 0,
             variant: variant
         )
+    }
+
+    /// Emit every ML Kit line as-is in natural page order. ML Kit already groups
+    /// tokens into lines correctly for thermal printouts (atomic decimals, one
+    /// reading per line). `VisionTextExtractor.reconstructRows` was built to
+    /// re-stitch Vision's fragmented observations and coalesces ML Kit lines
+    /// that share a Y band, collapsing 20+ printed rows into ~7. Sort by
+    /// vertical position (higher normalized Y first, since Y was flipped) with
+    /// an X tiebreak for lines sharing a row band.
+    private static func nativeRowLines(from text: Text, imageSize: CGSize) -> [String] {
+        guard imageSize.width > 0, imageSize.height > 0 else { return [] }
+        struct Entry { let y: CGFloat; let x: CGFloat; let text: String }
+        var entries: [Entry] = []
+        for block in text.blocks {
+            for line in block.lines {
+                let y = 1.0 - (line.frame.midY / imageSize.height)
+                let x = line.frame.minX / imageSize.width
+                entries.append(Entry(y: y, x: x, text: line.text))
+            }
+        }
+        entries.sort { a, b in
+            if abs(a.y - b.y) < 0.015 { return a.x < b.x }
+            return a.y > b.y
+        }
+        return entries.map(\.text)
     }
 
     /// Maps ML Kit's `Text` to the Vision-style `TextBox` array the existing
