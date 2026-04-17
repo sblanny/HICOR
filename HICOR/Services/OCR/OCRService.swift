@@ -39,6 +39,10 @@ struct OCRBatchResult: Equatable {
 }
 
 enum ParseScorer {
+    // Weights shipped provisional 2026-04-16. No multi-patient calibration fixtures
+    // existed at plan time; the only real debug logs were from one printout.
+    // Validate empirically against ≥5 distinct-patient captures (May 1 trip) and
+    // re-tune. Per-call logging in score(...) supports post-hoc calibration.
     static let wReadingCount: Double     = 0.50
     static let wSectionComplete: Double  = 0.25
     static let wMarkerContinuity: Double = 0.15
@@ -71,6 +75,7 @@ enum ParseScorer {
                   + wMarkerContinuity * markerContinuity
                   + wConfidence * confidence
 
+        print("ParseScorer: variant=\(extraction.variant.rawValue) reconstruction=\(reconstruction.rawValue) revision=\(extraction.revisionUsed) readings=\(readings) readingScore=\(String(format: "%.3f", readingScore)) completeness=\(completeness) markerContinuity=\(String(format: "%.3f", markerContinuity)) confidence=\(String(format: "%.3f", confidence)) total=\(String(format: "%.3f", total))")
         return VariantScore(
             variant: extraction.variant,
             reconstruction: reconstruction,
