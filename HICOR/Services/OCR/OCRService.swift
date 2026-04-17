@@ -130,38 +130,113 @@ final class OCRService {
     }
 
     func processImage(_ image: UIImage, photoIndex: Int = 0) async throws -> PrintoutResult {
-        let extracted = try await extractor.extractText(from: image)
-        return try Self.parseBest(from: extracted, photoIndex: photoIndex)
+        let result = await runPipeline(image: image, photoIndex: photoIndex)
+        if let printout = result.printout { return printout }
+        throw Self.errorFor(result: result) ?? .unrecognizedFormat
     }
 
-    func processImages(_ images: [UIImage]) async throws -> [PrintoutResult] {
-        var results: [PrintoutResult] = []
+    func processImages(_ images: [UIImage]) async -> OCRBatchResult {
+        var perImage: [OCRImageResult] = []
+        var snapshotEntries: [OCRDebugSnapshot.Entry] = []
+        var overallError: OCRError?
+
         for (index, image) in images.enumerated() {
-            let result = try await processImage(image, photoIndex: index)
-            results.append(result)
+            let imageResult = await runPipeline(image: image, photoIndex: index)
+            perImage.append(imageResult)
+            snapshotEntries.append(Self.buildDebugEntry(imageResult))
+            if imageResult.printout == nil, overallError == nil {
+                overallError = Self.errorFor(result: imageResult)
+            }
         }
-        return results
+
+        let snapshot = OCRDebugSnapshot(
+            entries: snapshotEntries,
+            overallError: overallError.map { String(describing: $0) } ?? ""
+        )
+        return OCRBatchResult(
+            perImage: perImage,
+            debugSnapshot: snapshot,
+            overallError: overallError
+        )
     }
 
-    static func parseBest(from extracted: ExtractedText, photoIndex: Int) throws -> PrintoutResult {
-        if extracted.rowBased.isEmpty && extracted.columnBased.isEmpty {
-            throw OCRError.noTextFound
+    private func runPipeline(image: UIImage, photoIndex: Int) async -> OCRImageResult {
+        let revisions = VisionTextExtractor.revisionsToTry()
+        var allScores: [VariantScore] = []
+        var winningScore: VariantScore?
+        var winningExtraction: ExtractedText?
+        var winningPrintout: PrintoutResult?
+        var extractionErrorDescription: String?
+
+        outer: for variant in PreprocessingVariant.allCases {
+            for revision in revisions {
+                let extracted: ExtractedText
+                do {
+                    extracted = try await extractor.extractText(from: image, variant: variant, revision: revision)
+                } catch {
+                    extractionErrorDescription = extractionErrorDescription ?? String(describing: error)
+                    continue
+                }
+                for strategy in [ReconstructionStrategy.row, .column] {
+                    let lines = (strategy == .row) ? extracted.rowBased : extracted.columnBased
+                    let parsed = try? PrintoutParser.parse(lines: lines, photoIndex: photoIndex)
+                    let score = ParseScorer.score(result: parsed, extraction: extracted, reconstruction: strategy)
+                    allScores.append(score)
+                    if score.totalScore > (winningScore?.totalScore ?? -1.0) {
+                        winningScore = score
+                        winningExtraction = extracted
+                        winningPrintout = parsed
+                    }
+                    if score.totalScore >= ParseScorer.shortCircuitThreshold {
+                        print("OCRService: short-circuit variant=\(variant.rawValue) revision=\(revision) score=\(score.totalScore)")
+                        break outer
+                    }
+                }
+            }
         }
 
-        let rowAttempt = try? PrintoutParser.parse(lines: extracted.rowBased, photoIndex: photoIndex)
-        if let r = rowAttempt, readingCount(r) > 0 {
-            return r
-        }
+        let hasReadings: Bool = {
+            guard let p = winningPrintout else { return false }
+            return (p.rightEye?.readings.isEmpty == false) || (p.leftEye?.readings.isEmpty == false)
+        }()
+        let printoutIfUsable = hasReadings ? winningPrintout : nil
 
-        let colAttempt = try? PrintoutParser.parse(lines: extracted.columnBased, photoIndex: photoIndex)
-        if let c = colAttempt, readingCount(c) > 0 {
-            return c
-        }
+        print("OCRService: winning variant=\(winningScore?.variant.rawValue ?? "none") revision=\(winningScore?.revisionUsed ?? -1) readings=\(winningScore?.validReadingCount ?? 0) score=\(winningScore?.totalScore ?? 0)")
 
-        if rowAttempt == nil && colAttempt == nil {
-            throw OCRError.unrecognizedFormat
+        return OCRImageResult(
+            photoIndex: photoIndex,
+            printout: printoutIfUsable,
+            winningScore: winningScore,
+            allScores: allScores,
+            rawText: winningExtraction.map { ($0.rowBased + $0.columnBased).joined(separator: "\n") } ?? "",
+            preprocessedImageData: winningExtraction?.preprocessedImageData,
+            extractionErrorDescription: extractionErrorDescription
+        )
+    }
+
+    private static func errorFor(result: OCRImageResult) -> OCRError? {
+        if result.allScores.isEmpty { return .noTextFound }
+        let anyParseSucceeded = result.allScores.contains { $0.parseErrorDescription == nil }
+        if anyParseSucceeded {
+            return result.printout == nil ? .insufficientReadings : nil
         }
-        throw OCRError.insufficientReadings
+        return .unrecognizedFormat
+    }
+
+    private static func buildDebugEntry(_ result: OCRImageResult) -> OCRDebugSnapshot.Entry {
+        OCRDebugSnapshot.Entry(
+            photoIndex: result.photoIndex,
+            rowBasedLines: [],
+            rowBasedFormat: "",
+            columnBasedLines: [],
+            columnBasedFormat: "",
+            chosenStrategy: result.winningScore?.reconstruction.rawValue ?? "none",
+            parseError: result.winningScore?.parseErrorDescription ?? result.extractionErrorDescription,
+            preprocessedImageData: result.preprocessedImageData,
+            variantScores: result.allScores,
+            revisionUsed: result.winningScore?.revisionUsed,
+            winningVariant: result.winningScore?.variant.rawValue
+        )
     }
 
     static func readingCount(_ result: PrintoutResult) -> Int {
