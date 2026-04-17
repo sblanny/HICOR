@@ -8,7 +8,18 @@ struct TextBox: Equatable {
     let midX: CGFloat
     let midY: CGFloat
     let minX: CGFloat
+    let height: CGFloat
     let text: String
+    let confidence: Float
+
+    init(midX: CGFloat, midY: CGFloat, minX: CGFloat, height: CGFloat = 0.0, text: String, confidence: Float = 1.0) {
+        self.midX = midX
+        self.midY = midY
+        self.minX = minX
+        self.height = height
+        self.text = text
+        self.confidence = confidence
+    }
 }
 
 struct ExtractedText: Equatable {
@@ -137,12 +148,14 @@ final class VisionTextExtractor: TextExtracting {
 
     private static func toTextBoxes(_ observations: [VNRecognizedTextObservation]) -> [TextBox] {
         observations.compactMap { obs in
-            guard let text = obs.topCandidates(1).first?.string else { return nil }
+            guard let candidate = obs.topCandidates(1).first else { return nil }
             return TextBox(
                 midX: obs.boundingBox.midX,
                 midY: obs.boundingBox.midY,
                 minX: obs.boundingBox.minX,
-                text: text
+                height: obs.boundingBox.height,
+                text: candidate.string,
+                confidence: candidate.confidence
             )
         }
     }

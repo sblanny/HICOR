@@ -176,6 +176,12 @@ final class VisionTextExtractorTests: XCTestCase {
         XCTAssertTrue(afterL.isEmpty, "Left section should be empty")
     }
 
+    func testTextBoxCarriesConfidenceAndHeight() {
+        let box = TextBox(midX: 0.5, midY: 0.5, minX: 0.4, height: 0.03, text: "SPH", confidence: 0.92)
+        XCTAssertEqual(box.confidence, 0.92, accuracy: 0.0001)
+        XCTAssertEqual(box.height, 0.03, accuracy: 0.0001)
+    }
+
     func testColumnReconstructionWithUnevenColumnHeights() {
         // Quality column shorter than data columns (common: header line on AX only)
         let boxes: [TextBox] = [
