@@ -61,10 +61,11 @@ enum DesktopFormatParser {
                 readings.append(RawReading(
                     id: UUID(),
                     sph: ReadingNormalizer.normalize(sph: parsed.sph),
-                    cyl: ReadingNormalizer.normalize(cyl: parsed.cyl),
-                    ax:  ReadingNormalizer.normalize(ax:  parsed.ax),
+                    cyl: parsed.isSphOnly ? 0.0 : ReadingNormalizer.normalize(cyl: parsed.cyl),
+                    ax:  parsed.isSphOnly ? 0   : ReadingNormalizer.normalize(ax:  parsed.ax),
                     eye: eye,
-                    sourcePhotoIndex: photoIndex
+                    sourcePhotoIndex: photoIndex,
+                    isSphOnly: parsed.isSphOnly
                 ))
             }
         }
@@ -83,8 +84,9 @@ enum DesktopFormatParser {
         )
     }
 
-    static func parseValueTriple(line: String, stripPrefix: String?) -> (sph: Double, cyl: Double, ax: Int)? {
+    static func parseValueTriple(line: String, stripPrefix: String?) -> (sph: Double, cyl: Double, ax: Int, isSphOnly: Bool)? {
         var work = line
+        let allowSphOnly = (stripPrefix == nil)  // AVG lines always carry all three values
         if let prefix = stripPrefix {
             if let range = work.range(of: prefix, options: .caseInsensitive) {
                 work.removeSubrange(work.startIndex..<range.upperBound)
@@ -92,14 +94,16 @@ enum DesktopFormatParser {
         }
         let tokens = combineSignTokens(work.split(whereSeparator: { $0.isWhitespace }).map(String.init))
         let numerics = tokens.filter { Double($0) != nil }
-        guard numerics.count >= 3,
-              let sph = Double(numerics[0]),
-              let cyl = Double(numerics[1]),
-              let ax  = Int(numerics[2])
-        else {
-            return nil
+        if numerics.count >= 3,
+           let sph = Double(numerics[0]),
+           let cyl = Double(numerics[1]),
+           let ax  = Int(numerics[2]) {
+            return (sph, cyl, ax, false)
         }
-        return (sph, cyl, ax)
+        if allowSphOnly, numerics.count == 1, let sph = Double(numerics[0]) {
+            return (sph, 0.0, 0, true)
+        }
+        return nil
     }
 
     static func combineSignTokens(_ tokens: [String]) -> [String] {

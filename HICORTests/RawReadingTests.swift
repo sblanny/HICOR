@@ -63,4 +63,44 @@ final class RawReadingTests: XCTestCase {
         XCTAssertEqual(decoded.id, id)
         XCTAssertEqual(decoded.sph, 1.5)
     }
+
+    func testIsSphOnlyDefaultsToFalse() {
+        let r = RawReading(id: UUID(), sph: -2.00, cyl: 0, ax: 0, eye: .right, sourcePhotoIndex: 0)
+        XCTAssertFalse(r.isSphOnly)
+    }
+
+    func testIsSphOnlyTrueSurvivesCodableRoundTrip() throws {
+        let original = RawReading(
+            id: UUID(),
+            sph: -2.00,
+            cyl: 0.0,
+            ax: 0,
+            eye: .left,
+            sourcePhotoIndex: 1,
+            isSphOnly: true
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RawReading.self, from: data)
+        XCTAssertTrue(decoded.isSphOnly)
+        XCTAssertEqual(decoded.sph, -2.00)
+        XCTAssertEqual(decoded.cyl, 0.0)
+        XCTAssertEqual(decoded.ax, 0)
+    }
+
+    func testDecodingLegacyJSONWithoutIsSphOnlyDefaultsToFalse() throws {
+        let id = UUID()
+        let legacyJSON = """
+        {
+          "id": "\(id.uuidString)",
+          "sph": -2.0,
+          "cyl": -0.5,
+          "ax": 90,
+          "eye": "right",
+          "sourcePhotoIndex": 0,
+          "lowConfidence": false
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(RawReading.self, from: legacyJSON)
+        XCTAssertFalse(decoded.isSphOnly)
+    }
 }

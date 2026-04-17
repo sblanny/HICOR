@@ -8,6 +8,11 @@ struct RawReading: Codable, Identifiable, Equatable {
     var eye: Eye
     var sourcePhotoIndex: Int
     var lowConfidence: Bool = false
+    // True when the machine printed SPH only (no CYL/AX) for this measurement —
+    // valid data meaning "no astigmatism detected on this sample". Stored cyl/ax
+    // are placeholders (0.0 / 0) and MUST NOT be fed into Phase 5 CYL/AX vector
+    // averaging. SPH still contributes to the SPH average.
+    var isSphOnly: Bool = false
 
     init(
         id: UUID,
@@ -16,7 +21,8 @@ struct RawReading: Codable, Identifiable, Equatable {
         ax: Int,
         eye: Eye,
         sourcePhotoIndex: Int,
-        lowConfidence: Bool = false
+        lowConfidence: Bool = false,
+        isSphOnly: Bool = false
     ) {
         self.id = id
         self.sph = sph
@@ -25,6 +31,7 @@ struct RawReading: Codable, Identifiable, Equatable {
         self.eye = eye
         self.sourcePhotoIndex = sourcePhotoIndex
         self.lowConfidence = lowConfidence
+        self.isSphOnly = isSphOnly
     }
 
     init(from decoder: Decoder) throws {
@@ -36,5 +43,6 @@ struct RawReading: Codable, Identifiable, Equatable {
         self.eye = try c.decode(Eye.self, forKey: .eye)
         self.sourcePhotoIndex = try c.decode(Int.self, forKey: .sourcePhotoIndex)
         self.lowConfidence = try c.decodeIfPresent(Bool.self, forKey: .lowConfidence) ?? false
+        self.isSphOnly = try c.decodeIfPresent(Bool.self, forKey: .isSphOnly) ?? false
     }
 }

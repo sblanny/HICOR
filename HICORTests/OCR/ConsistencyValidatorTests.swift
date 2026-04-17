@@ -50,6 +50,24 @@ final class ConsistencyValidatorTests: XCTestCase {
         XCTAssertNotNil(outcome.message)
     }
 
+    func testSphOnlyReadingsExcludedFromCylSpreadCheck() {
+        // CYL placeholders on isSphOnly readings (0.0) would falsely show a 1.00 D spread
+        // against a real -1.00 cyl reading. Validator must filter them out.
+        let rRight = [
+            RawReading(id: UUID(), sph: -2.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 0, isSphOnly: false),
+            RawReading(id: UUID(), sph: -2.00, cyl: 0.0,   ax: 0,  eye: .right, sourcePhotoIndex: 0, isSphOnly: true),
+            RawReading(id: UUID(), sph: -2.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 0, isSphOnly: false)
+        ]
+        let rLeft = [
+            RawReading(id: UUID(), sph: -2.00, cyl: -0.50, ax: 90, eye: .left, sourcePhotoIndex: 0)
+        ]
+        let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
+        let left  = EyeReading(id: UUID(), eye: .left,  readings: rLeft,  machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
+        let result = PrintoutResult(rightEye: right, leftEye: left, pd: nil, machineType: .handheld, sourcePhotoIndex: 0, rawText: "")
+        let outcome = ConsistencyValidator().validate([result], photoCount: 3)
+        XCTAssertEqual(outcome.result, .ok, "isSphOnly placeholders must not trigger cyl spread warning")
+    }
+
     func testSignMismatchSkippedWhenOneEyeBlind() {
         // Right eye populated with + SPH, left eye blind (nil EyeReading).
         // Without a left eye, there is no sign to mismatch against — should be .ok.

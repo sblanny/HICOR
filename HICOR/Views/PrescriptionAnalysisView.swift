@@ -93,7 +93,7 @@ struct PrescriptionAnalysisView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.subheadline.weight(.semibold))
             ForEach(reading.readings) { r in
-                rxRow(sph: r.sph, cyl: r.cyl, ax: r.ax, lowConfidence: r.lowConfidence)
+                rxRow(sph: r.sph, cyl: r.cyl, ax: r.ax, lowConfidence: r.lowConfidence, isSphOnly: r.isSphOnly)
             }
             if let avgSPH = reading.machineAvgSPH,
                let avgCYL = reading.machineAvgCYL,
@@ -102,7 +102,7 @@ struct PrescriptionAnalysisView: View {
                     Text(reading.machineType == .desktop ? "AVG" : "*")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.tint)
-                    rxRow(sph: avgSPH, cyl: avgCYL, ax: avgAX, lowConfidence: false)
+                    rxRow(sph: avgSPH, cyl: avgCYL, ax: avgAX, lowConfidence: false, isSphOnly: false)
                     if let conf = starConfidence {
                         Text("conf \(conf)")
                             .font(.caption2)
@@ -113,11 +113,11 @@ struct PrescriptionAnalysisView: View {
         }
     }
 
-    private func rxRow(sph: Double, cyl: Double, ax: Int, lowConfidence: Bool) -> some View {
+    private func rxRow(sph: Double, cyl: Double, ax: Int, lowConfidence: Bool, isSphOnly: Bool) -> some View {
         HStack(spacing: 12) {
             Text(formatDiopter(sph)).frame(width: 60, alignment: .leading)
-            Text(formatDiopter(cyl)).frame(width: 60, alignment: .leading)
-            Text("\(ax)°").frame(width: 50, alignment: .leading)
+            Text(isSphOnly ? "—" : formatDiopter(cyl)).frame(width: 60, alignment: .leading)
+            Text(isSphOnly ? "—" : "\(ax)°").frame(width: 50, alignment: .leading)
             if lowConfidence {
                 Text("E")
                     .font(.caption2.weight(.bold))

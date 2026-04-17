@@ -90,4 +90,44 @@ final class HandheldFormatParserTests: XCTestCase {
         XCTAssertEqual(result.leftEye?.machineAvgAX, 85)
         XCTAssertEqual(result.handheldStarConfidenceLeft, 5)
     }
+
+    func testMixedSphOnlyFixtureFlagsAndPlaceholders() {
+        let lines = OCRFixture.load("handheld_mixed_sph_only")
+        let result = HandheldFormatParser.parse(lines: lines, photoIndex: 0)
+
+        guard let right = result.rightEye?.readings,
+              let left  = result.leftEye?.readings else {
+            return XCTFail("Missing eye readings")
+        }
+
+        XCTAssertEqual(right.count, 5)
+        XCTAssertEqual(right.filter { $0.isSphOnly }.count, 2, "Right eye has 2 SPH-only readings")
+        XCTAssertEqual(right.filter { !$0.isSphOnly }.count, 3, "Right eye has 3 full readings")
+
+        let rightSphOnly = right.filter { $0.isSphOnly }
+        for r in rightSphOnly {
+            XCTAssertEqual(r.cyl, 0.0, "SPH-only readings store cyl placeholder 0.0")
+            XCTAssertEqual(r.ax, 0,    "SPH-only readings store ax placeholder 0")
+            XCTAssertEqual(r.sph, -2.00)
+        }
+
+        XCTAssertEqual(left.count, 5)
+        XCTAssertEqual(left.filter { $0.isSphOnly }.count, 3, "Left eye has 3 SPH-only readings")
+        XCTAssertEqual(left.filter { !$0.isSphOnly }.count, 2, "Left eye has 2 full readings")
+
+        XCTAssertEqual(result.rightEye?.machineAvgSPH, -2.00)
+        XCTAssertEqual(result.rightEye?.machineAvgCYL, -0.50)
+        XCTAssertEqual(result.leftEye?.machineAvgSPH, -2.25)
+        XCTAssertEqual(result.leftEye?.machineAvgCYL, -0.25)
+    }
+
+    func testSphOnlyReadingWithEQualityFlagIsLowConfidence() {
+        let parsed = HandheldFormatParser.parseReadingLine("- 2.00 E")
+        XCTAssertNotNil(parsed)
+        XCTAssertEqual(parsed?.sph, -2.00)
+        XCTAssertEqual(parsed?.cyl, 0.0)
+        XCTAssertEqual(parsed?.ax, 0)
+        XCTAssertEqual(parsed?.lowConfidence, true)
+        XCTAssertEqual(parsed?.isSphOnly, true)
+    }
 }

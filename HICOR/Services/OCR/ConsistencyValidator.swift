@@ -55,10 +55,14 @@ struct ConsistencyValidator {
             }.flatMap { $0.readings }
             guard readings.count >= 2 else { continue }
             let sphSpread = (readings.map(\.sph).max()! - readings.map(\.sph).min()!)
-            let cylSpread = (readings.map(\.cyl).max()! - readings.map(\.cyl).min()!)
             if sphSpread > ConsistencyValidator.sphSpreadThreshold {
                 return "\(eye == .right ? "Right" : "Left") eye sphere readings vary by \(String(format: "%.2f", sphSpread)) D. Verify the printout."
             }
+            // SPH-only readings carry cyl = 0.0 as a placeholder; excluding them
+            // prevents false-positive spread warnings against the real cyl values.
+            let cylReadings = readings.filter { !$0.isSphOnly }.map(\.cyl)
+            guard cylReadings.count >= 2 else { continue }
+            let cylSpread = (cylReadings.max()! - cylReadings.min()!)
             if cylSpread > ConsistencyValidator.cylSpreadThreshold {
                 return "\(eye == .right ? "Right" : "Left") eye cylinder readings vary by \(String(format: "%.2f", cylSpread)) D. Verify the printout."
             }

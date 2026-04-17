@@ -125,6 +125,7 @@ See `RESEARCH.md` for sources, light-pass conclusions, and the **✅ Final Decis
 ## Known Limitations
 
 - **OCR may extract fewer readings than printed** (e.g. 5 of 8) when Vision fragments a reading line onto multiple observations and only the SPH column survives reconstruction. This is acceptable — averaging with 5 good readings still produces a clinically valid prescription. Phase 9 polish may improve fragment-joining heuristics.
+- **SPH-only readings are valid clinical data.** Some autorefractor measurements print SPH with no CYL/AX (the machine detected no astigmatism on that sample). Both parsers accept these and store `RawReading` with `isSphOnly = true` and placeholder `cyl = 0.0`, `ax = 0`. `ConsistencyValidator` already filters them out of the cyl spread check. **Phase 5 averaging must also filter on `isSphOnly`**: include the SPH value in the SPH average, but exclude the placeholder cyl/ax from any J0/J45 vector decomposition or CYL/AX averaging. Treat them as "SPH-contributing only" peers.
 
 ## Persistence Architecture
 

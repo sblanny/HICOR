@@ -70,11 +70,12 @@ enum HandheldFormatParser {
                 readings.append(RawReading(
                     id: UUID(),
                     sph: ReadingNormalizer.normalize(sph: parsed.sph),
-                    cyl: ReadingNormalizer.normalize(cyl: parsed.cyl),
-                    ax:  ReadingNormalizer.normalize(ax:  parsed.ax),
+                    cyl: parsed.isSphOnly ? 0.0 : ReadingNormalizer.normalize(cyl: parsed.cyl),
+                    ax:  parsed.isSphOnly ? 0   : ReadingNormalizer.normalize(ax:  parsed.ax),
                     eye: eye,
                     sourcePhotoIndex: photoIndex,
-                    lowConfidence: parsed.lowConfidence
+                    lowConfidence: parsed.lowConfidence,
+                    isSphOnly: parsed.isSphOnly
                 ))
             }
         }
@@ -96,21 +97,24 @@ enum HandheldFormatParser {
         return (er, starConfidence)
     }
 
-    static func parseReadingLine(_ line: String) -> (sph: Double, cyl: Double, ax: Int, lowConfidence: Bool)? {
+    static func parseReadingLine(_ line: String) -> (sph: Double, cyl: Double, ax: Int, lowConfidence: Bool, isSphOnly: Bool)? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         let tokens = DesktopFormatParser.combineSignTokens(
             trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         )
         let qualityToken = tokens.last.flatMap { $0 == "AQ" || $0 == "E" ? $0 : nil }
         let numerics = tokens.compactMap { Double($0) != nil ? $0 : nil }
-        guard numerics.count >= 3,
-              let sph = Double(numerics[0]),
-              let cyl = Double(numerics[1]),
-              let ax  = Int(numerics[2])
-        else {
-            return nil
+        if numerics.count >= 3,
+           let sph = Double(numerics[0]),
+           let cyl = Double(numerics[1]),
+           let ax  = Int(numerics[2]) {
+            return (sph, cyl, ax, qualityToken == "E", false)
         }
-        return (sph, cyl, ax, qualityToken == "E")
+        // Machine printed SPH only (no astigmatism detected on this measurement).
+        if numerics.count == 1, let sph = Double(numerics[0]) {
+            return (sph, 0.0, 0, qualityToken == "E", true)
+        }
+        return nil
     }
 
     static func parseStarLine(_ line: String) -> (sph: Double, cyl: Double, ax: Int, confidence: Int?)? {
