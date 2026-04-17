@@ -8,11 +8,11 @@ final class PhotoCaptureState {
     var pdManualEntryRequired: Bool = false
 
     var canAddMorePhotos: Bool {
-        photos.count < Constants.maxPhotosAllowed
+        photos.count < 1
     }
 
     var canAnalyze: Bool {
-        photos.count >= Constants.minPhotosRequired
+        photos.count == 1
     }
 
     var isReadyToCommit: Bool {

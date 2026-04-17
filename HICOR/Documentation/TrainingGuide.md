@@ -25,29 +25,24 @@ You only need to do this once per day.
 
 1. Place the printout slip on a flat, well-lit surface.
 2. Make sure all numbers and the entire slip fit in the camera view.
-3. Tap the shutter to capture.
-4. Take **at least 2 photos**, up to **5 maximum**. More photos = better accuracy.
-5. If a photo looks blurry or cut off, tap the **✕** on its thumbnail and retake it.
-6. When done, tap **Analyze Prescription**.
+3. Tap the shutter to take **one photo** of the autorefractor printout.
+4. If the photo looks blurry or cut off, tap the **✕** on its thumbnail and retake it.
+5. When the photo looks good, tap **Analyze Prescription**.
 
-**Tips for good photos:**
+> **Note for v1:** HICOR currently captures one photo per patient while we stabilize the OCR pipeline. A future version will support 2–5 photos with cross-photo averaging for higher accuracy. For now, a single clear photo is all you need.
+
+**Tips for a good photo:**
 - Hold the phone parallel to the printout — don't tilt.
 - Avoid shadows from your hand or head.
 - Indoor lighting is fine; direct sunlight may overexpose.
 
 ## What the Warnings Mean
 
-### Hard Block (Red — must fix)
-
-> "Right and left eyes have opposite signs. Capture more photos."
-
-This appears when you've taken only 2 photos and the eyes look very different (e.g., right eye is far-sighted but left eye is near-sighted). The app needs more data to be confident. **Take more photos and try again.**
-
 ### Warning (Yellow — can override)
 
-> "Eyes have opposite signs across all readings."
+> "Right and left eyes have opposite corrections. Verify before continuing."
 
-You've taken 3+ photos and the eyes still look very different. This *can* happen with real patients. If you've checked and you're confident the printouts are correct, you can tap **Override and Continue**. The record will be saved with a note that you overrode the warning.
+The photo shows one eye needing plus correction and the other needing minus correction. That *can* happen with real patients but is worth a double-check. Confirm the printout matches what you see on screen. If you're confident the printout is correct, tap **Override and Continue**. The record will be saved with a note that you overrode the warning.
 
 ### Red PD Banner
 

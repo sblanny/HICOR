@@ -17,7 +17,7 @@ struct PhotoCaptureView: View {
 
             addPhotoButton
 
-            Text("\(state.photos.count) of \(Constants.maxPhotosAllowed) photos")
+            Text(state.photos.count == 1 ? "Photo ready" : "Take one photo")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 

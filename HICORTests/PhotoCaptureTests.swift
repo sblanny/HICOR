@@ -2,43 +2,39 @@ import XCTest
 @testable import HICOR
 
 final class PhotoCaptureTests: XCTestCase {
-    func testCannotAnalyzeWithFewerThanTwoPhotos() {
+    func testCannotAnalyzeWithZeroPhotos() {
         let state = PhotoCaptureState()
         XCTAssertFalse(state.canAnalyze)
+    }
 
+    func testCanAnalyzeWithOnePhoto() {
+        let state = PhotoCaptureState()
         state.addPhoto(Data([0x01]))
-        XCTAssertFalse(state.canAnalyze)
-
-        state.addPhoto(Data([0x02]))
         XCTAssertTrue(state.canAnalyze)
     }
 
-    func testCanAddUpToFivePhotos() {
+    func testCannotAddMoreThanOnePhoto() {
         let state = PhotoCaptureState()
-        for i in 0..<6 {
-            state.addPhoto(Data([UInt8(i)]))
-        }
-        XCTAssertEqual(state.photos.count, Constants.maxPhotosAllowed)
+        state.addPhoto(Data([0x01]))
         XCTAssertFalse(state.canAddMorePhotos)
+
+        state.addPhoto(Data([0x02]))
+        XCTAssertEqual(state.photos.count, 1, "Second addPhoto must be a no-op")
     }
 
     func testRemovePhotoReducesCount() {
         let state = PhotoCaptureState()
         state.addPhoto(Data([0x01]))
-        state.addPhoto(Data([0x02]))
-        state.addPhoto(Data([0x03]))
+        XCTAssertEqual(state.photos.count, 1)
 
-        state.removePhoto(at: 1)
-
-        XCTAssertEqual(state.photos.count, 2)
-        XCTAssertEqual(state.photos[0], Data([0x01]))
-        XCTAssertEqual(state.photos[1], Data([0x03]))
+        state.removePhoto(at: 0)
+        XCTAssertEqual(state.photos.count, 0)
+        XCTAssertTrue(state.canAddMorePhotos)
     }
 
-    func testPDRequiredBlocksAnalyzeUntilEntered() {
+    func testPDRequiredBlocksCommitUntilEntered() {
         let state = PhotoCaptureState()
         state.addPhoto(Data([0x01]))
-        state.addPhoto(Data([0x02]))
         state.pdManualEntryRequired = true
 
         XCTAssertTrue(state.canAnalyze,
