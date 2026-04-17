@@ -89,10 +89,14 @@ enum ParseScorer {
         let readings = (printout.rightEye?.readings ?? []) + (printout.leftEye?.readings ?? [])
         guard !readings.isEmpty else { return 0.0 }
         let accepted = extraction.boxes.filter { box in
-            readings.contains { rr in
-                box.text.contains(String(format: "%.2f", rr.sph))
-                    || box.text.contains(String(format: "%.2f", rr.cyl))
-                    || box.text.contains(String(rr.ax))
+            let tokens = box.text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            return readings.contains { rr in
+                let sph = String(format: "%.2f", rr.sph)
+                let cyl = String(format: "%.2f", rr.cyl)
+                let ax = String(rr.ax)
+                return box.text.contains(sph)
+                    || box.text.contains(cyl)
+                    || tokens.contains(ax)
             }
         }
         guard !accepted.isEmpty else { return 0.0 }
