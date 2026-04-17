@@ -57,6 +57,13 @@ struct ExtractedText: Equatable {
 
 protocol TextExtracting {
     func extractText(from image: UIImage) async throws -> ExtractedText
+    func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText
+}
+
+extension TextExtracting {
+    func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText {
+        try await extractText(from: image)
+    }
 }
 
 enum VisionTextExtractorError: Error {
@@ -126,10 +133,24 @@ final class VisionTextExtractor: TextExtracting {
     private let ciContext = CIContext(options: nil)
 
     func extractText(from image: UIImage) async throws -> ExtractedText {
+        try await extractText(from: image, variant: .standard, revision: Self.latestRevision())
+    }
+
+    func extractText(
+        from image: UIImage,
+        variant: PreprocessingVariant,
+        revision: Int
+    ) async throws -> ExtractedText {
         guard let (rawCG, orientation) = Self.normalizedCGImage(from: image) else {
             throw VisionTextExtractorError.missingCGImage
         }
-        let preprocessedCG = preprocessForOCR(cgImage: rawCG) ?? rawCG
+        let preprocessedCG: CGImage = {
+            switch variant {
+            case .standard: return preprocessStandard(cgImage: rawCG) ?? rawCG
+            case .thermalBinary: return preprocessThermalBinary(cgImage: rawCG) ?? rawCG
+            case .raw: return preprocessRaw(cgImage: rawCG) ?? rawCG
+            }
+        }()
         let preprocessedJPEG = uprightJPEG(cgImage: preprocessedCG, orientation: orientation)
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -140,13 +161,18 @@ final class VisionTextExtractor: TextExtracting {
                 }
                 let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
                 let boxes = Self.toTextBoxes(observations)
+                let thresholds = Self.computeAdaptiveThresholds(from: boxes)
                 continuation.resume(returning: ExtractedText(
-                    rowBased: Self.reconstructRows(from: boxes),
-                    columnBased: Self.reconstructColumnarLines(from: boxes),
+                    rowBased: Self.reconstructRows(from: boxes, rowTolerance: thresholds.rowTolerance),
+                    columnBased: Self.reconstructColumnarLines(
+                        from: boxes,
+                        columnGapThreshold: thresholds.columnGapThreshold,
+                        rowTolerance: thresholds.rowTolerance
+                    ),
                     preprocessedImageData: preprocessedJPEG,
                     boxes: boxes,
-                    revisionUsed: VNRecognizeTextRequestRevision3,
-                    variant: .standard
+                    revisionUsed: revision,
+                    variant: variant
                 ))
             }
             request.recognitionLevel = .accurate
@@ -156,7 +182,7 @@ final class VisionTextExtractor: TextExtracting {
             request.minimumTextHeight = 0.01
             if #available(iOS 16.0, *) {
                 request.automaticallyDetectsLanguage = false
-                request.revision = VNRecognizeTextRequestRevision3
+                request.revision = revision
             }
 
             let handler = VNImageRequestHandler(cgImage: preprocessedCG, orientation: orientation, options: [:])
@@ -166,6 +192,17 @@ final class VisionTextExtractor: TextExtracting {
                 continuation.resume(throwing: VisionTextExtractorError.visionFailed(error))
             }
         }
+    }
+
+    static func latestRevision() -> Int {
+        let supported = VNRecognizeTextRequest.supportedRevisions.sorted(by: >)
+        return supported.first ?? VNRecognizeTextRequestRevision3
+    }
+
+    static func revisionsToTry() -> [Int] {
+        let supported = VNRecognizeTextRequest.supportedRevisions.sorted(by: >)
+        if supported.isEmpty { return [VNRecognizeTextRequestRevision3] }
+        return Array(supported.prefix(2))
     }
 
     private static func normalizedCGImage(from image: UIImage) -> (CGImage, CGImagePropertyOrientation)? {
@@ -185,7 +222,7 @@ final class VisionTextExtractor: TextExtracting {
         return (cg, orientation)
     }
 
-    private func preprocessForOCR(cgImage: CGImage) -> CGImage? {
+    private func preprocessStandard(cgImage: CGImage) -> CGImage? {
         let ciImage = CIImage(cgImage: cgImage)
 
         var processed = ciImage.transformed(by: CGAffineTransform(scaleX: 2.0, y: 2.0))
@@ -205,6 +242,30 @@ final class VisionTextExtractor: TextExtracting {
             processed = sharp.outputImage ?? processed
         }
 
+        return ciContext.createCGImage(processed, from: processed.extent)
+    }
+
+    private func preprocessRaw(cgImage: CGImage) -> CGImage? {
+        let ciImage = CIImage(cgImage: cgImage)
+        let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: 2.0, y: 2.0))
+        return ciContext.createCGImage(scaled, from: scaled.extent)
+    }
+
+    private func preprocessThermalBinary(cgImage: CGImage) -> CGImage? {
+        let ciImage = CIImage(cgImage: cgImage)
+        var processed = ciImage.transformed(by: CGAffineTransform(scaleX: 2.0, y: 2.0))
+        if let filter = CIFilter(name: "CIColorControls") {
+            filter.setValue(processed, forKey: kCIInputImageKey)
+            filter.setValue(0.0, forKey: kCIInputSaturationKey)
+            filter.setValue(2.5, forKey: kCIInputContrastKey)
+            filter.setValue(0.15, forKey: kCIInputBrightnessKey)
+            processed = filter.outputImage ?? processed
+        }
+        if let threshold = CIFilter(name: "CIColorThreshold") {
+            threshold.setValue(processed, forKey: kCIInputImageKey)
+            threshold.setValue(0.55, forKey: "inputThreshold")
+            processed = threshold.outputImage ?? processed
+        }
         return ciContext.createCGImage(processed, from: processed.extent)
     }
 
