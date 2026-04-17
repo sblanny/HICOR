@@ -39,6 +39,7 @@ struct ConsistencyValidator {
         guard !right.isEmpty, !left.isEmpty else { return nil }
         let rAvg = right.reduce(0, +) / Double(right.count)
         let lAvg = left.reduce(0, +)  / Double(left.count)
+        print("ConsistencyValidator: R_avgSPH=\(rAvg) (n=\(right.count)), L_avgSPH=\(lAvg) (n=\(left.count))")
         if rAvg > 0.25 && lAvg < -0.25 {
             return "right eye plus, left eye minus"
         }

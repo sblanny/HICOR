@@ -130,4 +130,29 @@ final class HandheldFormatParserTests: XCTestCase {
         XCTAssertEqual(parsed?.lowConfidence, true)
         XCTAssertEqual(parsed?.isSphOnly, true)
     }
+
+    func testStrayAxisFragmentDoesNotParseAsSphOnly() {
+        // Vision sometimes fragments a triple line down to just the axis token.
+        // "90" / "180" / "85" must NOT be accepted as SPH=+90 — they would
+        // poison the consistency validator's average and trigger false sign mismatches.
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("90"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("180"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("85 AQ"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("136"))
+    }
+
+    func testImplausibleSphMagnitudeRejectedAsSphOnly() {
+        // Even with a decimal point, values outside ±25 D are not real spheres.
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("90.0"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("- 54.00"))
+        XCTAssertNil(HandheldFormatParser.parseReadingLine("136.5"))
+    }
+
+    func testRealSphOnlyValuesStillParse() {
+        // Regression guard: legitimate SPH-only readings must continue to parse.
+        XCTAssertEqual(HandheldFormatParser.parseReadingLine("- 2.00 AQ")?.sph, -2.00)
+        XCTAssertEqual(HandheldFormatParser.parseReadingLine("+ 1.50")?.sph, 1.50)
+        XCTAssertEqual(HandheldFormatParser.parseReadingLine("- 21.00")?.sph, -21.00)
+        XCTAssertEqual(HandheldFormatParser.parseReadingLine("- 21.00")?.isSphOnly, true)
+    }
 }

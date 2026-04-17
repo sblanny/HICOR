@@ -100,7 +100,13 @@ enum DesktopFormatParser {
            let ax  = Int(numerics[2]) {
             return (sph, cyl, ax, false)
         }
-        if allowSphOnly, numerics.count == 1, let sph = Double(numerics[0]) {
+        // Same fragmentation guard as HandheldFormatParser: SPH-only must look like
+        // a decimal sphere (has ".", in ±25 D), never a stray integer axis token.
+        if allowSphOnly,
+           numerics.count == 1,
+           numerics[0].contains("."),
+           let sph = Double(numerics[0]),
+           abs(sph) <= 25.0 {
             return (sph, 0.0, 0, true)
         }
         return nil

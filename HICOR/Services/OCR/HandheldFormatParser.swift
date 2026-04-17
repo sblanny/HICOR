@@ -111,7 +111,14 @@ enum HandheldFormatParser {
             return (sph, cyl, ax, qualityToken == "E", false)
         }
         // Machine printed SPH only (no astigmatism detected on this measurement).
-        if numerics.count == 1, let sph = Double(numerics[0]) {
+        // Guard against Vision fragmenting a triple line down to a stray axis token
+        // (e.g. "90" or "180"): require a decimal point AND clinically plausible
+        // sphere range. Real SPH values always print like "-2.00" / "+1.50" and
+        // sit within ±25 D — axis values are bare integers and run 1..180.
+        if numerics.count == 1,
+           numerics[0].contains("."),
+           let sph = Double(numerics[0]),
+           abs(sph) <= 25.0 {
             return (sph, 0.0, 0, qualityToken == "E", true)
         }
         return nil
