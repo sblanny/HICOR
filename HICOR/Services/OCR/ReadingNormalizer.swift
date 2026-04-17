@@ -62,6 +62,20 @@ enum ReadingNormalizer {
         // desktop printouts (thin-stroke glyph confusion). Only applied
         // inside tokens flagged numeric by isNumericCandidate.
         s = s.replacingOccurrences(of: "A", with: "4")
+
+        // Dropped-decimal repair. ML Kit occasionally loses the decimal point
+        // on thermal-paper decimals like "4.25" → "425", leaving a bare 3-
+        // digit integer the shape gate then rejects. A 3-digit token whose
+        // integer value exceeds 180 cannot be a legitimate axis (AX range is
+        // 1-180), so it must be a diopter with a missing dot. We restore the
+        // dot after the first digit. Values ≤ 180 are left alone because
+        // they could be real axes (e.g. 108, 150, 175).
+        if s.count == 3,
+           s.allSatisfy(\.isNumber),
+           let intValue = Int(s), intValue > 180 {
+            let i = s.index(after: s.startIndex)
+            s = s[..<i] + "." + s[i...]
+        }
         return s
     }
 
