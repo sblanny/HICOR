@@ -42,22 +42,38 @@ enum DesktopFormatParser {
     }
 
     private static func parseEyeSection(_ lines: [String], eye: Eye, photoIndex: Int) -> EyeReading? {
-        var readings: [RawReading] = []
+        // First pass: locate the AVG line. On the GRK-6000 printout AVG is
+        // usually OCR'd more reliably than individual reading rows (larger
+        // font, single triple per row), so its sign becomes the authoritative
+        // hint for unsigned individual SPH tokens below. ML Kit drops thin
+        // thermal-paper minus signs frequently, so we need a baseline.
         var avgSPH: Double?
         var avgCYL: Double?
         var avgAX: Int?
-
-        for line in lines {
-            let upper = line.uppercased()
-            if upper.contains("AVG") {
-                if let parsed = parseValueTriple(line: line, stripPrefix: "AVG") {
-                    avgSPH = ReadingNormalizer.normalize(sph: parsed.sph)
-                    avgCYL = ReadingNormalizer.normalize(cyl: parsed.cyl)
-                    avgAX  = ReadingNormalizer.normalize(ax: parsed.ax)
-                }
-                continue
+        for line in lines where line.uppercased().contains("AVG") {
+            if let parsed = parseValueTriple(line: line, stripPrefix: "AVG", sphSignHint: nil) {
+                avgSPH = ReadingNormalizer.normalize(sph: parsed.sph)
+                avgCYL = ReadingNormalizer.normalize(cyl: parsed.cyl)
+                avgAX  = ReadingNormalizer.normalize(ax: parsed.ax)
+                break
             }
-            if let parsed = parseValueTriple(line: line, stripPrefix: nil) {
+        }
+
+        // Sign hint for unsigned individual SPH tokens. Trust AVG when we
+        // have it; otherwise default to negative (the common case for this
+        // mission population) and flag via parser log.
+        let sphSignHint: Double
+        if let avgSPH, avgSPH != 0 {
+            sphSignHint = avgSPH < 0 ? -1 : 1
+        } else {
+            sphSignHint = -1
+            print("Parser: no AVG line for \(eye); defaulting unsigned SPH to negative")
+        }
+
+        var readings: [RawReading] = []
+        for line in lines {
+            if line.uppercased().contains("AVG") { continue }
+            if let parsed = parseValueTriple(line: line, stripPrefix: nil, sphSignHint: sphSignHint) {
                 readings.append(RawReading(
                     id: UUID(),
                     sph: ReadingNormalizer.normalize(sph: parsed.sph),
@@ -84,7 +100,11 @@ enum DesktopFormatParser {
         )
     }
 
-    static func parseValueTriple(line: String, stripPrefix: String?) -> (sph: Double, cyl: Double, ax: Int, isSphOnly: Bool)? {
+    static func parseValueTriple(
+        line: String,
+        stripPrefix: String?,
+        sphSignHint: Double? = nil
+    ) -> (sph: Double, cyl: Double, ax: Int, isSphOnly: Bool)? {
         var work = line
         let allowSphOnly = (stripPrefix == nil)  // AVG lines always carry all three values
         if let prefix = stripPrefix {
@@ -104,23 +124,51 @@ enum DesktopFormatParser {
 
         let tokens = combineSignTokens(trimmed.split(whereSeparator: { $0.isWhitespace }).map(String.init))
         let numerics = tokens.filter { Double($0) != nil }
-        if numerics.count >= 3,
-           let sph = Double(numerics[0]),
-           let cyl = Double(numerics[1]),
-           let ax  = Int(numerics[2]),
-           ReadingPlausibility.isPlausibleSPH(sph),
-           ReadingPlausibility.isPlausibleCYL(cyl),
-           ReadingPlausibility.isPlausibleAX(ax) {
-            print("Parser: accepted desktop line '\(line)' as SPH=\(sph) CYL=\(cyl) AX=\(ax)")
-            return (sph, cyl, ax, false)
+        if numerics.count >= 3 {
+            let sphToken = numerics[0]
+            let cylToken = numerics[1]
+            let axToken  = numerics[2]
+
+            // Desktop header states "CYL (-)" — all cylinders are negative
+            // by format. Reject explicit + CYL as OCR garbage; coerce
+            // unsigned values to negative (ML Kit drops thin minus signs
+            // on thermal paper).
+            if cylToken.hasPrefix("+") {
+                print("Parser: rejecting desktop line '\(line)' — explicit + CYL invalid")
+                return nil
+            }
+            let cylSigned = cylToken.hasPrefix("-") ? cylToken : "-" + cylToken
+
+            // Unsigned SPH takes the sign hint from AVG when provided.
+            let sphSigned: String = {
+                guard let hint = sphSignHint else { return sphToken }
+                if sphToken.hasPrefix("+") || sphToken.hasPrefix("-") { return sphToken }
+                return (hint < 0 ? "-" : "+") + sphToken
+            }()
+
+            if let sph = Double(sphSigned),
+               let cyl = Double(cylSigned),
+               let ax  = Int(axToken),
+               ReadingPlausibility.isPlausibleSPH(sph),
+               ReadingPlausibility.isPlausibleCYL(cyl),
+               ReadingPlausibility.isPlausibleAX(ax) {
+                print("Parser: accepted desktop line '\(line)' as SPH=\(sph) CYL=\(cyl) AX=\(ax)")
+                return (sph, cyl, ax, false)
+            }
         }
         if allowSphOnly,
            numerics.count == 1,
-           numerics[0].contains("."),
-           let sph = Double(numerics[0]),
-           ReadingPlausibility.isPlausibleSPH(sph) {
-            print("Parser: accepted desktop SPH-only line '\(line)' as SPH=\(sph)")
-            return (sph, 0.0, 0, true)
+           numerics[0].contains(".") {
+            let token = numerics[0]
+            let signedToken: String = {
+                guard let hint = sphSignHint,
+                      !(token.hasPrefix("+") || token.hasPrefix("-")) else { return token }
+                return (hint < 0 ? "-" : "+") + token
+            }()
+            if let sph = Double(signedToken), ReadingPlausibility.isPlausibleSPH(sph) {
+                print("Parser: accepted desktop SPH-only line '\(line)' as SPH=\(sph)")
+                return (sph, 0.0, 0, true)
+            }
         }
         print("Parser: rejecting desktop line '\(line)' — reason: range or token count")
         return nil

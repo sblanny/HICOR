@@ -102,10 +102,10 @@ final class MLKitTextExtractor: TextExtracting {
         }
 
         // Tolerance is in raw image pixels, so it scales naturally with
-        // capture resolution. ~50 px on a 3024×4032 image is roughly one
+        // capture resolution. ~60 px on a 3024×4032 image is roughly one
         // line-height; lines that share a row collapse together and tiebreak
         // on the secondary axis (left-to-right within the row).
-        let rowTolerance: CGFloat = 50.0
+        let rowTolerance: CGFloat = 60.0
         entries.sort { a, b in
             if abs(a.primary - b.primary) < rowTolerance {
                 return a.secondary < b.secondary
@@ -113,7 +113,34 @@ final class MLKitTextExtractor: TextExtracting {
             return a.primary < b.primary
         }
 
-        let rowBased = entries.map(\.text)
+        // Group entries that share a row (within rowTolerance on the primary
+        // axis) into one joined string. Parsers expect one full printed row
+        // per element — e.g. "- 4.25  - 1.25  18" as a single line — not
+        // four atomic ML Kit lines. Anchor on the row's first entry so
+        // rows whose chain of neighbours drifts past the tolerance still
+        // split cleanly.
+        var rowBased: [String] = []
+        var currentTexts: [String] = []
+        var anchor: CGFloat?
+        for entry in entries {
+            if let a = anchor, abs(entry.primary - a) >= rowTolerance {
+                rowBased.append(currentTexts.joined(separator: "  "))
+                currentTexts = []
+                anchor = nil
+            }
+            if anchor == nil { anchor = entry.primary }
+            currentTexts.append(entry.text)
+        }
+        if !currentTexts.isEmpty {
+            rowBased.append(currentTexts.joined(separator: "  "))
+        }
+
+        print("=== Row Groups After Reconstruction ===")
+        for (i, row) in rowBased.enumerated() {
+            print("Row \(i): '\(row)'")
+        }
+        print("=== End Row Groups ===")
+
         // Temporary: column-based mirrors row-based until row reconstruction
         // is proven. Vision's columnar reconstruction is bypassed entirely
         // in this diagnostic pass.

@@ -39,7 +39,7 @@ enum ReadingNormalizer {
         ]
         if reserved.contains(token.uppercased()) { return false }
 
-        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S"]
+        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S", "A"]
         let structural: Set<Character> = ["+", "-", ".", "*"]
         var hasDigit = false
         for ch in token {
@@ -58,6 +58,10 @@ enum ReadingNormalizer {
         s = s.replacingOccurrences(of: "l", with: "1")
         s = s.replacingOccurrences(of: "I", with: "1")
         s = s.replacingOccurrences(of: "S", with: "5")
+        // ML Kit occasionally substitutes capital A for digit 4 on thermal
+        // desktop printouts (thin-stroke glyph confusion). Only applied
+        // inside tokens flagged numeric by isNumericCandidate.
+        s = s.replacingOccurrences(of: "A", with: "4")
         return s
     }
 
