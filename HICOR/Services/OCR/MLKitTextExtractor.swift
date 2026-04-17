@@ -83,12 +83,17 @@ final class MLKitTextExtractor: TextExtracting {
         for block in result.blocks {
             for line in block.lines {
                 if isImagePortrait {
-                    // Document rotated 90° in a portrait image:
-                    //   image X (left → right) = document Y (top → bottom)
-                    //   image Y (top → bottom) = document X (left → right)
+                    // Document rotated 90° clockwise in a portrait .right-
+                    // orientation image (iPhone held portrait, subject shot
+                    // landscape): the document's top edge runs down the
+                    // image's LEFT side, so
+                    //   image X ascending   = document Y top → bottom
+                    //   image Y DESCENDING  = document X left → right
+                    // We negate imgY so ascending sort of secondary tracks
+                    // document-left-to-right within a row.
                     entries.append(Entry(
                         primary: line.frame.minX,
-                        secondary: line.frame.minY,
+                        secondary: -line.frame.minY,
                         text: line.text
                     ))
                 } else {
@@ -103,36 +108,31 @@ final class MLKitTextExtractor: TextExtracting {
 
         // Tolerance is in raw image pixels, so it scales naturally with
         // capture resolution. ~60 px on a 3024×4032 image is roughly one
-        // line-height; lines that share a row collapse together and tiebreak
-        // on the secondary axis (left-to-right within the row).
+        // line-height. We sort primary-only (strict weak ordering) then
+        // form groups via an anchor walk; mixing tolerance tiebreaks into
+        // the comparator is non-transitive and gives Swift's sort undefined
+        // output — that bug produced scrambled row groups on device.
         let rowTolerance: CGFloat = 60.0
-        entries.sort { a, b in
-            if abs(a.primary - b.primary) < rowTolerance {
-                return a.secondary < b.secondary
-            }
-            return a.primary < b.primary
-        }
+        entries.sort { $0.primary < $1.primary }
 
-        // Group entries that share a row (within rowTolerance on the primary
-        // axis) into one joined string. Parsers expect one full printed row
-        // per element — e.g. "- 4.25  - 1.25  18" as a single line — not
-        // four atomic ML Kit lines. Anchor on the row's first entry so
-        // rows whose chain of neighbours drifts past the tolerance still
-        // split cleanly.
-        var rowBased: [String] = []
-        var currentTexts: [String] = []
+        var rowGroups: [[Entry]] = []
+        var currentGroup: [Entry] = []
         var anchor: CGFloat?
         for entry in entries {
-            if let a = anchor, abs(entry.primary - a) >= rowTolerance {
-                rowBased.append(currentTexts.joined(separator: "  "))
-                currentTexts = []
+            if let a = anchor, entry.primary - a >= rowTolerance {
+                rowGroups.append(currentGroup)
+                currentGroup = []
                 anchor = nil
             }
             if anchor == nil { anchor = entry.primary }
-            currentTexts.append(entry.text)
+            currentGroup.append(entry)
         }
-        if !currentTexts.isEmpty {
-            rowBased.append(currentTexts.joined(separator: "  "))
+        if !currentGroup.isEmpty { rowGroups.append(currentGroup) }
+
+        let rowBased: [String] = rowGroups.map { group in
+            group.sorted { $0.secondary < $1.secondary }
+                .map(\.text)
+                .joined(separator: "  ")
         }
 
         print("=== Row Groups After Reconstruction ===")
