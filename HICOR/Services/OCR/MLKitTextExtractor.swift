@@ -73,23 +73,29 @@ final class MLKitTextExtractor: TextExtracting {
     /// tokens into lines correctly for thermal printouts (atomic decimals, one
     /// reading per line). `VisionTextExtractor.reconstructRows` was built to
     /// re-stitch Vision's fragmented observations and coalesces ML Kit lines
-    /// that share a Y band, collapsing 20+ printed rows into ~7. Sort by
-    /// vertical position (higher normalized Y first, since Y was flipped) with
-    /// an X tiebreak for lines sharing a row band.
+    /// that share a Y band, collapsing 20+ printed rows into ~7. Sort in
+    /// ML Kit's native top-left coordinate system: smaller Y is higher on the
+    /// page, so ascending Y sort = top-to-bottom reading order. X tiebreak
+    /// within a 0.015 band captures lines that truly share a row (e.g. a
+    /// reading and its inline axis label).
+    ///
+    /// Do NOT flip Y here. The parent `toTextBoxes` still flips because
+    /// `reconstructColumnarLines` was written against Vision's bottom-left
+    /// convention, but `nativeRowLines` never calls into that code path.
     private static func nativeRowLines(from text: Text, imageSize: CGSize) -> [String] {
         guard imageSize.width > 0, imageSize.height > 0 else { return [] }
         struct Entry { let y: CGFloat; let x: CGFloat; let text: String }
         var entries: [Entry] = []
         for block in text.blocks {
             for line in block.lines {
-                let y = 1.0 - (line.frame.midY / imageSize.height)
+                let y = line.frame.midY / imageSize.height
                 let x = line.frame.minX / imageSize.width
                 entries.append(Entry(y: y, x: x, text: line.text))
             }
         }
         entries.sort { a, b in
             if abs(a.y - b.y) < 0.015 { return a.x < b.x }
-            return a.y > b.y
+            return a.y < b.y
         }
         return entries.map(\.text)
     }
