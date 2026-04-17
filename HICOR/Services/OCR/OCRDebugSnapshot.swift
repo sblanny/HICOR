@@ -10,6 +10,9 @@ struct OCRDebugSnapshot: Codable, Equatable {
         let chosenStrategy: String
         let parseError: String?
         let preprocessedImageData: Data?
+        let variantScores: [VariantScore]?
+        let revisionUsed: Int?
+        let winningVariant: String?
 
         init(
             photoIndex: Int,
@@ -19,7 +22,10 @@ struct OCRDebugSnapshot: Codable, Equatable {
             columnBasedFormat: String,
             chosenStrategy: String,
             parseError: String?,
-            preprocessedImageData: Data? = nil
+            preprocessedImageData: Data? = nil,
+            variantScores: [VariantScore]? = nil,
+            revisionUsed: Int? = nil,
+            winningVariant: String? = nil
         ) {
             self.photoIndex = photoIndex
             self.rowBasedLines = rowBasedLines
@@ -29,6 +35,9 @@ struct OCRDebugSnapshot: Codable, Equatable {
             self.chosenStrategy = chosenStrategy
             self.parseError = parseError
             self.preprocessedImageData = preprocessedImageData
+            self.variantScores = variantScores
+            self.revisionUsed = revisionUsed
+            self.winningVariant = winningVariant
         }
     }
     let entries: [Entry]
@@ -47,7 +56,10 @@ struct OCRDebugSnapshot: Codable, Equatable {
                 columnBasedFormat: e.columnBasedFormat,
                 chosenStrategy: e.chosenStrategy,
                 parseError: e.parseError,
-                preprocessedImageData: nil
+                preprocessedImageData: nil,
+                variantScores: e.variantScores,
+                revisionUsed: e.revisionUsed,
+                winningVariant: e.winningVariant
             )
         }
         return OCRDebugSnapshot(entries: stripped, overallError: overallError)

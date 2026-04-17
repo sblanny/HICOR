@@ -149,6 +149,12 @@ See `RESEARCH.md` for sources, light-pass conclusions, and the **✅ Final Decis
 
 In Swift 5.10 mode the actor methods freely accept and return `PatientRefraction` instances across the actor boundary; `@Model` classes aren't `Sendable`, so a future move to Swift 6 strict-concurrency mode will produce compile errors at those boundaries. The canonical migration is to pass `PersistentIdentifier` or `Sendable` struct snapshots across the actor instead. Deferred, not a runtime issue today.
 
+### OCR real-device validation
+
+After any OCR pipeline change, validate against real handheld printouts before shipping. **Target:** ≥70% reading extraction rate (readings recovered / readings visible on the printout) across ≥5 real-device captures under mixed conditions (clean, slightly tilted, faded thermal). Use `OCRDebugSnapshot.Entry.variantScores` to diagnose which variant/revision won and why. Synthetic fixture tests are necessary but not sufficient — they cannot catch Vision-level degradations.
+
+**ParseScorer weights are provisional.** The weights (0.50 / 0.25 / 0.15 / 0.10) in `OCRService.swift` shipped on 2026-04-16 **uncalibrated**: the only real-capture debug logs available at that time were from a single patient's printout, and calibrating against one capture would overfit. The scorer emits verbose per-call logging (variant / reconstruction / revision / readings / component scores / total) so field captures from mixed patients can be replayed offline for calibration. Revisit weights once ≥5 captures from **distinct** printouts are available (the May 1 mission trip is the expected source).
+
 ## Build & Test
 
 ```bash

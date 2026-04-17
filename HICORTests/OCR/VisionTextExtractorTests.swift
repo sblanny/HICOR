@@ -176,6 +176,12 @@ final class VisionTextExtractorTests: XCTestCase {
         XCTAssertTrue(afterL.isEmpty, "Left section should be empty")
     }
 
+    func testTextBoxCarriesConfidenceAndHeight() {
+        let box = TextBox(midX: 0.5, midY: 0.5, minX: 0.4, height: 0.03, text: "SPH", confidence: 0.92)
+        XCTAssertEqual(box.confidence, 0.92, accuracy: 0.0001)
+        XCTAssertEqual(box.height, 0.03, accuracy: 0.0001)
+    }
+
     func testColumnReconstructionWithUnevenColumnHeights() {
         // Quality column shorter than data columns (common: header line on AX only)
         let boxes: [TextBox] = [
@@ -193,5 +199,36 @@ final class VisionTextExtractorTests: XCTestCase {
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(rows[0], "- 1.00  - 0.25  90  AQ")
         XCTAssertEqual(rows[1], "- 1.25  - 0.25  92")
+    }
+
+    func testExtractedTextCarriesBoxesRevisionAndVariant() {
+        let box = TextBox(midX: 0.5, midY: 0.5, minX: 0.4, height: 0.03, text: "SPH", confidence: 0.9)
+        let extracted = ExtractedText(
+            rowBased: ["SPH"],
+            columnBased: [],
+            preprocessedImageData: nil,
+            boxes: [box],
+            revisionUsed: 4,
+            variant: .thermalBinary
+        )
+        XCTAssertEqual(extracted.boxes.count, 1)
+        XCTAssertEqual(extracted.revisionUsed, 4)
+        XCTAssertEqual(extracted.variant, .thermalBinary)
+    }
+
+    func testAdaptiveThresholdsUsePercentiles() {
+        let boxes: [TextBox] = (0..<8).map { i in
+            TextBox(midX: 0.1 + CGFloat(i) * 0.05, midY: 0.5, minX: 0.1 + CGFloat(i) * 0.05, height: 0.04, text: "x", confidence: 1.0)
+        }
+        let t = VisionTextExtractor.computeAdaptiveThresholds(from: boxes)
+        XCTAssertEqual(t.rowTolerance, 0.024, accuracy: 0.001)
+        XCTAssertGreaterThan(t.columnGapThreshold, 0.0)
+    }
+
+    func testAdaptiveFallsBackWhenTooFewObservations() {
+        let boxes: [TextBox] = [TextBox(midX: 0.5, midY: 0.5, minX: 0.4, height: 0.04, text: "x", confidence: 1.0)]
+        let t = VisionTextExtractor.computeAdaptiveThresholds(from: boxes)
+        XCTAssertEqual(t.rowTolerance, VisionTextExtractor.defaultRowTolerance)
+        XCTAssertEqual(t.columnGapThreshold, VisionTextExtractor.defaultColumnGapThreshold)
     }
 }
