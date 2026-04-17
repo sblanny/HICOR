@@ -19,6 +19,7 @@ struct AnalysisPlaceholderView: View {
     @State private var navigation: NavigationPayload?
     @State private var debugSnapshot: OCRDebugSnapshot?
     @State private var showDebugSheet: Bool = false
+    @State private var presentAnalysis: Bool = false
 
     private enum Phase {
         case running
@@ -69,9 +70,13 @@ struct AnalysisPlaceholderView: View {
                 message: Text(content.message),
                 primaryButton: .default(Text("Override and Continue")) {
                     if let payload = navigation {
-                        let refraction = payload.refraction
-                        refraction.consistencyWarningOverridden = true
+                        payload.refraction.consistencyWarningOverridden = true
+                        print("=== OCR nav: override accepted, navigating to PrescriptionAnalysisView ===")
                         phase = .advancing
+                        presentAnalysis = true
+                    } else {
+                        print("=== OCR nav: override tapped but navigation payload missing — dismissing ===")
+                        dismiss()
                     }
                 },
                 secondaryButton: .cancel(Text("Back to Photos")) { dismiss() }
@@ -103,22 +108,33 @@ struct AnalysisPlaceholderView: View {
                 }
             }
         }
-        .navigationDestination(isPresented: Binding(
-            get: { phase == .advancing && navigation != nil },
-            set: { if !$0 { phase = .awaitingDecision } }
-        )) {
+        .navigationDestination(isPresented: $presentAnalysis) {
             if let payload = navigation {
                 PrescriptionAnalysisView(
                     refraction: payload.refraction,
                     results: payload.results
                 )
+            } else {
+                // Defensive fallback: binding flipped to true but payload is nil.
+                // Show an explicit error rather than a blank screen.
+                VStack(spacing: 12) {
+                    Text("Navigation error")
+                        .font(.headline)
+                    Text("The prescription analysis data was lost. Please retake photos.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Back to Photos") { dismiss() }
+                }
+                .padding()
             }
         }
     }
 
     private func runOCR() async {
+        print("=== OCR nav: runOCR started (\(photos.count) photos) ===")
         let images = photos.compactMap { UIImage(data: $0) }
         guard !images.isEmpty else {
+            print("=== OCR nav: no decodable images — presenting error alert ===")
             presentError("No usable photos were captured.", snapshot: nil)
             return
         }
@@ -223,6 +239,7 @@ struct AnalysisPlaceholderView: View {
 
         if !allParsed || !anyReading {
             let baseMessage = firstError.map(humanReadable) ?? "No SPH/CYL/AX readings could be extracted from the photos. Retake them with better focus and lighting."
+            print("=== OCR nav: OCR/parse failure — presenting error alert (allParsed=\(allParsed), anyReading=\(anyReading)) ===")
             let snapshot = OCRDebugSnapshot(entries: debugEntries, overallError: baseMessage)
             await persistFailure(snapshot: snapshot)
             presentError(baseMessage, snapshot: snapshot)
@@ -247,14 +264,19 @@ struct AnalysisPlaceholderView: View {
         let validator = ConsistencyValidator()
         let outcome = validator.validate(results, photoCount: photos.count)
         navigation = NavigationPayload(refraction: refraction, results: results)
+        print("=== OCR nav: consistency result = \(outcome.result), message = \(outcome.message ?? "nil") ===")
 
         switch outcome.result {
         case .ok:
+            print("=== OCR nav: OK — navigating to PrescriptionAnalysisView ===")
             phase = .advancing
+            presentAnalysis = true
         case .warningOverridable:
+            print("=== OCR nav: warningOverridable — presenting override alert ===")
             overridableAlert = AlertContent(message: outcome.message ?? "Readings are inconsistent. Verify before continuing.")
             phase = .awaitingDecision
         case .hardBlock:
+            print("=== OCR nav: hardBlock — presenting block alert ===")
             hardBlockAlert = AlertContent(message: outcome.message ?? "Readings cannot be reconciled. Capture additional printouts.")
             phase = .awaitingDecision
         }

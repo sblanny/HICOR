@@ -122,6 +122,10 @@ See `RESEARCH.md` for sources, light-pass conclusions, and the **✅ Final Decis
 - **iPhone first.** iPad layout is a future version.
 - **No login.** Device identity (`identifierForVendor`) only.
 
+## Known Limitations
+
+- **OCR may extract fewer readings than printed** (e.g. 5 of 8) when Vision fragments a reading line onto multiple observations and only the SPH column survives reconstruction. This is acceptable — averaging with 5 good readings still produces a clinically valid prescription. Phase 9 polish may improve fragment-joining heuristics.
+
 ## Persistence Architecture
 
 ### App-rooted DI
