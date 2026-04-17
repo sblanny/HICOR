@@ -69,6 +69,54 @@ final class VisionTextExtractor: TextExtracting {
     static let defaultRowTolerance: CGFloat = 0.02
     static let defaultColumnGapThreshold: CGFloat = 0.08
 
+    struct AdaptiveThresholds: Equatable {
+        let rowTolerance: CGFloat
+        let columnGapThreshold: CGFloat
+    }
+
+    static func computeAdaptiveThresholds(from boxes: [TextBox]) -> AdaptiveThresholds {
+        guard boxes.count >= 4 else {
+            return AdaptiveThresholds(
+                rowTolerance: defaultRowTolerance,
+                columnGapThreshold: defaultColumnGapThreshold
+            )
+        }
+
+        let heights = boxes.map(\.height).sorted()
+        let medianHeight = heights[heights.count / 2]
+        let rowTol = max(medianHeight * 0.6, 0.008)
+
+        var rowGroups: [[TextBox]] = []
+        for box in boxes.sorted(by: { $0.midY > $1.midY }) {
+            if let idx = rowGroups.firstIndex(where: {
+                abs(($0.first?.midY ?? 0) - box.midY) < rowTol
+            }) {
+                rowGroups[idx].append(box)
+            } else {
+                rowGroups.append([box])
+            }
+        }
+
+        var gaps: [CGFloat] = []
+        for var row in rowGroups {
+            row.sort { $0.minX < $1.minX }
+            if row.count >= 2 {
+                for i in 1..<row.count {
+                    let gap = row[i].minX - row[i - 1].minX
+                    if gap > 0 { gaps.append(gap) }
+                }
+            }
+        }
+        guard gaps.count >= 3 else {
+            return AdaptiveThresholds(rowTolerance: rowTol, columnGapThreshold: defaultColumnGapThreshold)
+        }
+        gaps.sort()
+        let p75Index = min(Int(Double(gaps.count) * 0.75), gaps.count - 1)
+        let colGap = max(gaps[p75Index], 0.03)
+
+        return AdaptiveThresholds(rowTolerance: rowTol, columnGapThreshold: colGap)
+    }
+
     private static let customWords: [String] = [
         "SPH", "CYL", "AX", "AQ", "REF", "PD", "VD", "AVG",
         "[R]", "[L]", "<R>", "<L>",

@@ -215,4 +215,20 @@ final class VisionTextExtractorTests: XCTestCase {
         XCTAssertEqual(extracted.revisionUsed, 4)
         XCTAssertEqual(extracted.variant, .thermalBinary)
     }
+
+    func testAdaptiveThresholdsUsePercentiles() {
+        let boxes: [TextBox] = (0..<8).map { i in
+            TextBox(midX: 0.1 + CGFloat(i) * 0.05, midY: 0.5, minX: 0.1 + CGFloat(i) * 0.05, height: 0.04, text: "x", confidence: 1.0)
+        }
+        let t = VisionTextExtractor.computeAdaptiveThresholds(from: boxes)
+        XCTAssertEqual(t.rowTolerance, 0.024, accuracy: 0.001)
+        XCTAssertGreaterThan(t.columnGapThreshold, 0.0)
+    }
+
+    func testAdaptiveFallsBackWhenTooFewObservations() {
+        let boxes: [TextBox] = [TextBox(midX: 0.5, midY: 0.5, minX: 0.4, height: 0.04, text: "x", confidence: 1.0)]
+        let t = VisionTextExtractor.computeAdaptiveThresholds(from: boxes)
+        XCTAssertEqual(t.rowTolerance, VisionTextExtractor.defaultRowTolerance)
+        XCTAssertEqual(t.columnGapThreshold, VisionTextExtractor.defaultColumnGapThreshold)
+    }
 }
