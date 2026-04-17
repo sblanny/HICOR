@@ -123,7 +123,7 @@ final class OCRService {
 
     private let extractor: TextExtracting
 
-    init(extractor: TextExtracting = VisionTextExtractor()) {
+    init(extractor: TextExtracting = MLKitTextExtractor()) {
         self.extractor = extractor
     }
 
@@ -163,37 +163,37 @@ final class OCRService {
     }
 
     private func runPipeline(image: UIImage, photoIndex: Int) async -> OCRImageResult {
-        let revisions = VisionTextExtractor.revisionsToTry()
         var allScores: [VariantScore] = []
         var winningScore: VariantScore?
-        var winningExtraction: ExtractedText?
         var winningPrintout: PrintoutResult?
         var extractionErrorDescription: String?
 
-        outer: for variant in PreprocessingVariant.allCases {
-            for revision in revisions {
-                let extracted: ExtractedText
-                do {
-                    extracted = try await extractor.extractText(from: image, variant: variant, revision: revision)
-                } catch {
-                    extractionErrorDescription = extractionErrorDescription ?? String(describing: error)
-                    continue
-                }
-                for strategy in [ReconstructionStrategy.row, .column] {
-                    let lines = (strategy == .row) ? extracted.rowBased : extracted.columnBased
-                    let parsed = try? PrintoutParser.parse(lines: lines, photoIndex: photoIndex)
-                    let score = ParseScorer.score(result: parsed, extraction: extracted, reconstruction: strategy)
-                    allScores.append(score)
-                    if score.totalScore > (winningScore?.totalScore ?? -1.0) {
-                        winningScore = score
-                        winningExtraction = extracted
-                        winningPrintout = parsed
-                    }
-                    if score.totalScore >= ParseScorer.shortCircuitThreshold {
-                        print("OCRService: short-circuit variant=\(variant.rawValue) revision=\(revision) score=\(score.totalScore)")
-                        break outer
-                    }
-                }
+        let extracted: ExtractedText
+        do {
+            extracted = try await extractor.extractText(from: image)
+        } catch {
+            extractionErrorDescription = String(describing: error)
+            return OCRImageResult(
+                photoIndex: photoIndex,
+                printout: nil,
+                winningScore: nil,
+                allScores: [],
+                rawText: "",
+                rowBasedLines: [],
+                columnBasedLines: [],
+                preprocessedImageData: nil,
+                extractionErrorDescription: extractionErrorDescription
+            )
+        }
+
+        for strategy in [ReconstructionStrategy.row, .column] {
+            let lines = (strategy == .row) ? extracted.rowBased : extracted.columnBased
+            let parsed = try? PrintoutParser.parse(lines: lines, photoIndex: photoIndex)
+            let score = ParseScorer.score(result: parsed, extraction: extracted, reconstruction: strategy)
+            allScores.append(score)
+            if score.totalScore > (winningScore?.totalScore ?? -1.0) {
+                winningScore = score
+                winningPrintout = parsed
             }
         }
 
@@ -203,17 +203,17 @@ final class OCRService {
         }()
         let printoutIfUsable = hasReadings ? winningPrintout : nil
 
-        print("OCRService: winning variant=\(winningScore?.variant.rawValue ?? "none") revision=\(winningScore?.revisionUsed ?? -1) readings=\(winningScore?.validReadingCount ?? 0) score=\(winningScore?.totalScore ?? 0)")
+        print("OCRService: winning reconstruction=\(winningScore?.reconstruction.rawValue ?? "none") readings=\(winningScore?.validReadingCount ?? 0) score=\(winningScore?.totalScore ?? 0)")
 
         return OCRImageResult(
             photoIndex: photoIndex,
             printout: printoutIfUsable,
             winningScore: winningScore,
             allScores: allScores,
-            rawText: winningExtraction.map { ($0.rowBased + $0.columnBased).joined(separator: "\n") } ?? "",
-            rowBasedLines: winningExtraction?.rowBased ?? [],
-            columnBasedLines: winningExtraction?.columnBased ?? [],
-            preprocessedImageData: winningExtraction?.preprocessedImageData,
+            rawText: (extracted.rowBased + extracted.columnBased).joined(separator: "\n"),
+            rowBasedLines: extracted.rowBased,
+            columnBasedLines: extracted.columnBased,
+            preprocessedImageData: extracted.preprocessedImageData,
             extractionErrorDescription: extractionErrorDescription
         )
     }
