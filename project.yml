@@ -12,7 +12,7 @@ configs:
   Release: release
 settings:
   base:
-    DEVELOPMENT_TEAM: 52KA3KSGP9
+    DEVELOPMENT_TEAM: 7538YVB3M5
     SWIFT_VERSION: "5.10"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     CODE_SIGN_STYLE: Automatic
@@ -33,7 +33,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.creativearchives.hicor
         CODE_SIGN_ENTITLEMENTS: HICOR/HICOR.entitlements
-        DEVELOPMENT_TEAM: 52KA3KSGP9
+        DEVELOPMENT_TEAM: 7538YVB3M5
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
