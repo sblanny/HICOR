@@ -24,4 +24,14 @@ final class PrintoutParserTests: XCTestCase {
             XCTAssertEqual(error as? OCRService.OCRError, OCRService.OCRError.unrecognizedFormat)
         }
     }
+
+    func testDetectRecognizesDesktopFromRawAVGEvenBeforeNormalization() {
+        let result = PrintoutParser.detect(rawLines: ["AVG + 1.50 - 0.25 90", "[R]"])
+        XCTAssertEqual(result, .desktop)
+    }
+
+    func testDetectRecognizesHandheldFromRawREFMarker() {
+        let result = PrintoutParser.detect(rawLines: ["-REF-", "[R]"])
+        XCTAssertEqual(result, .handheld)
+    }
 }

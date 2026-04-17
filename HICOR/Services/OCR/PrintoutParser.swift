@@ -22,6 +22,10 @@ enum PrintoutParser {
         return .unknown
     }
 
+    static func detect(rawLines: [String]) -> PrintoutFormatDetectionResult {
+        detect(lines: rawLines)
+    }
+
     static func parse(lines: [String], photoIndex: Int) throws -> PrintoutResult {
         switch detect(lines: lines) {
         case .desktop:
