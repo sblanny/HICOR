@@ -4,6 +4,12 @@ import Foundation
 import UIKit
 import Vision
 
+enum PreprocessingVariant: String, Codable, CaseIterable, Equatable {
+    case standard
+    case thermalBinary
+    case raw
+}
+
 struct TextBox: Equatable {
     let midX: CGFloat
     let midY: CGFloat
@@ -26,11 +32,24 @@ struct ExtractedText: Equatable {
     let rowBased: [String]
     let columnBased: [String]
     let preprocessedImageData: Data?
+    let boxes: [TextBox]
+    let revisionUsed: Int
+    let variant: PreprocessingVariant
 
-    init(rowBased: [String], columnBased: [String], preprocessedImageData: Data? = nil) {
+    init(
+        rowBased: [String],
+        columnBased: [String],
+        preprocessedImageData: Data? = nil,
+        boxes: [TextBox] = [],
+        revisionUsed: Int = VNRecognizeTextRequestRevision3,
+        variant: PreprocessingVariant = .standard
+    ) {
         self.rowBased = rowBased
         self.columnBased = columnBased
         self.preprocessedImageData = preprocessedImageData
+        self.boxes = boxes
+        self.revisionUsed = revisionUsed
+        self.variant = variant
     }
 
     static let empty = ExtractedText(rowBased: [], columnBased: [])
@@ -76,7 +95,10 @@ final class VisionTextExtractor: TextExtracting {
                 continuation.resume(returning: ExtractedText(
                     rowBased: Self.reconstructRows(from: boxes),
                     columnBased: Self.reconstructColumnarLines(from: boxes),
-                    preprocessedImageData: preprocessedJPEG
+                    preprocessedImageData: preprocessedJPEG,
+                    boxes: boxes,
+                    revisionUsed: VNRecognizeTextRequestRevision3,
+                    variant: .standard
                 ))
             }
             request.recognitionLevel = .accurate

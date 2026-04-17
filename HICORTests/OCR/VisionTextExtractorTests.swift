@@ -200,4 +200,19 @@ final class VisionTextExtractorTests: XCTestCase {
         XCTAssertEqual(rows[0], "- 1.00  - 0.25  90  AQ")
         XCTAssertEqual(rows[1], "- 1.25  - 0.25  92")
     }
+
+    func testExtractedTextCarriesBoxesRevisionAndVariant() {
+        let box = TextBox(midX: 0.5, midY: 0.5, minX: 0.4, height: 0.03, text: "SPH", confidence: 0.9)
+        let extracted = ExtractedText(
+            rowBased: ["SPH"],
+            columnBased: [],
+            preprocessedImageData: nil,
+            boxes: [box],
+            revisionUsed: 4,
+            variant: .thermalBinary
+        )
+        XCTAssertEqual(extracted.boxes.count, 1)
+        XCTAssertEqual(extracted.revisionUsed, 4)
+        XCTAssertEqual(extracted.variant, .thermalBinary)
+    }
 }
