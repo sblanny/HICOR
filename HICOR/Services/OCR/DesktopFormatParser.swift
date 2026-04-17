@@ -5,8 +5,26 @@ enum DesktopFormatParser {
     static func parse(lines rawLines: [String], photoIndex: Int) -> PrintoutResult {
         let lines = rawLines.map(ReadingNormalizer.normalizeOCRString)
 
-        let rightSection = sliceSection(lines: lines, startMarker: "[R]", altMarker: "<R>")
-        let leftSection  = sliceSection(lines: lines, startMarker: "[L]", altMarker: "<L>")
+        // Accept OCR variants for the section markers observed on real
+        // GRK-6000 thermal captures: `<R>` often misreads as `<A>` (R and A
+        // share diagonal strokes in a matrix font), and `<L>` can lose its
+        // leading `<` when the thin vertical stroke fades. Without these
+        // variants, sliceSection returns empty and the eye loses all
+        // readings downstream.
+        let rightMarkers = ["[R]", "<R>", "<A>"]
+        let leftMarkers  = ["[L]", "<L>", "L>"]
+        let terminalMarkers = ["PD", "GRK", "GAK"]
+
+        let rightSection = sliceSection(
+            lines: lines,
+            startMarkers: rightMarkers,
+            endMarkers: leftMarkers + terminalMarkers
+        )
+        let leftSection = sliceSection(
+            lines: lines,
+            startMarkers: leftMarkers,
+            endMarkers: rightMarkers + terminalMarkers
+        )
 
         let rightParsed = parseEyeSection(rightSection, eye: .right, photoIndex: photoIndex)
         let leftParsed  = parseEyeSection(leftSection,  eye: .left,  photoIndex: photoIndex)
@@ -25,15 +43,20 @@ enum DesktopFormatParser {
         )
     }
 
-    private static func sliceSection(lines: [String], startMarker: String, altMarker: String) -> [String] {
-        guard let startIndex = lines.firstIndex(where: { $0.contains(startMarker) || $0.contains(altMarker) }) else {
+    private static func sliceSection(
+        lines: [String],
+        startMarkers: [String],
+        endMarkers: [String]
+    ) -> [String] {
+        guard let startIndex = lines.firstIndex(where: { line in
+            startMarkers.contains(where: { line.contains($0) })
+        }) else {
             return []
         }
         let after = Array(lines.suffix(from: lines.index(after: startIndex)))
-        let endMarkers = ["[L]", "<L>", "[R]", "<R>", "PD"]
         var section: [String] = []
         for line in after {
-            if endMarkers.contains(where: { line.contains($0) && !line.contains(startMarker) && !line.contains(altMarker) }) {
+            if endMarkers.contains(where: { line.contains($0) }) {
                 break
             }
             section.append(line)
