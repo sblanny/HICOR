@@ -19,6 +19,12 @@ enum MLKitTextExtractorError: Error {
 /// breadcrumb that ML Kit (not Vision) ran.
 final class MLKitTextExtractor: TextExtracting {
 
+    private struct Entry {
+        let primary: CGFloat
+        let secondary: CGFloat
+        let text: String
+    }
+
     private let recognizer: TextRecognizer
 
     init() {
@@ -78,7 +84,6 @@ final class MLKitTextExtractor: TextExtracting {
         // detection (e.g. locating "AVG" or "GAK-6000" markers).
         let isImagePortrait = image.size.height > image.size.width
 
-        struct Entry { let primary: CGFloat; let secondary: CGFloat; let text: String }
         var entries: [Entry] = []
         for block in result.blocks {
             for line in block.lines {
@@ -103,6 +108,28 @@ final class MLKitTextExtractor: TextExtracting {
                         text: line.text
                     ))
                 }
+            }
+        }
+
+        // Tilt correction. Real-device captures of the GRK-6000 printout are
+        // rarely perfectly square to the camera — a few degrees of tilt drifts
+        // each document-row diagonally in image space at a slope that can push
+        // intra-row primary spread beyond the anchor tolerance, shattering a
+        // single reading into two or three groups. The column header row
+        // (SPH / CYL / AX) is guaranteed to be collinear on one document-row,
+        // so fitting a line through those tokens gives the tilt angle exactly.
+        // Subtracting that slope from each entry's primary collapses rows
+        // back to tight clusters (~10 px spread) well inside the 60 px
+        // tolerance.
+        let tilt = Self.estimateTilt(entries: entries)
+        print("=== Tilt Correction === slope=\(tilt)")
+        if tilt != 0 {
+            entries = entries.map {
+                Entry(
+                    primary: $0.primary - tilt * $0.secondary,
+                    secondary: $0.secondary,
+                    text: $0.text
+                )
             }
         }
 
@@ -167,5 +194,46 @@ final class MLKitTextExtractor: TextExtracting {
             revisionUsed: 0,
             variant: variant
         )
+    }
+
+    /// Fit a line through the SPH/CYL/AX column-header row to measure document
+    /// tilt in the (primary, secondary) coordinate space. Returns the slope
+    /// d(primary)/d(secondary); applying `p - slope * s` to every entry's
+    /// primary axis removes the tilt. Returns 0 when we can't find at least
+    /// two collinear headers (conservative — no correction rather than wrong
+    /// correction).
+    private static func estimateTilt(entries: [Entry]) -> CGFloat {
+        let headerTexts: Set<String> = ["SPH", "CYL", "AX"]
+        let headers = entries.filter { headerTexts.contains($0.text.uppercased()) }
+        guard headers.count >= 2 else { return 0 }
+
+        // Cluster headers by primary coordinate so multiple header rows
+        // (should not happen on GRK-6000, but defensive) don't blend into a
+        // single regression. 500 px threshold is roughly 8 line-heights on a
+        // 4032 px axis — comfortable separation.
+        let sorted = headers.sorted { $0.primary < $1.primary }
+        var clusters: [[Entry]] = [[sorted[0]]]
+        for entry in sorted.dropFirst() {
+            let lastEntry = clusters[clusters.count - 1].last!
+            if entry.primary - lastEntry.primary < 500 {
+                clusters[clusters.count - 1].append(entry)
+            } else {
+                clusters.append([entry])
+            }
+        }
+        for cluster in clusters where cluster.count >= 2 {
+            let xs = cluster.map(\.secondary)
+            let ys = cluster.map(\.primary)
+            let n = CGFloat(xs.count)
+            let sumX = xs.reduce(0, +)
+            let sumY = ys.reduce(0, +)
+            let sumXY = zip(xs, ys).map(*).reduce(0, +)
+            let sumX2 = xs.map { $0 * $0 }.reduce(0, +)
+            let denom = n * sumX2 - sumX * sumX
+            if abs(denom) > 1e-6 {
+                return (n * sumXY - sumX * sumY) / denom
+            }
+        }
+        return 0
     }
 }
