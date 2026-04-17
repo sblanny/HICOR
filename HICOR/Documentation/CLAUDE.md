@@ -129,6 +129,19 @@ See `RESEARCH.md` for sources, light-pass conclusions, and the **✅ Final Decis
 - **OCR may extract fewer readings than printed** (e.g. 5 of 8) when the recognizer fragments a reading line onto multiple observations and only the SPH column survives reconstruction. Less frequent on ML Kit than it was on Vision, but still possible. Averaging with 5 good readings still produces a clinically valid prescription.
 - **SPH-only readings are valid clinical data.** Some autorefractor measurements print SPH with no CYL/AX (the machine detected no astigmatism on that sample). Both parsers accept these and store `RawReading` with `isSphOnly = true` and placeholder `cyl = 0.0`, `ax = 0`. `ConsistencyValidator` already filters them out of the cyl spread check. **Phase 5 averaging must also filter on `isSphOnly`**: include the SPH value in the SPH average, but exclude the placeholder cyl/ax from any J0/J45 vector decomposition or CYL/AX averaging. Treat them as "SPH-contributing only" peers.
 
+## v1 Scope: Desktop Format Only
+
+For the May 1 mission trip, HICOR v1 supports the GRK-6000 desktop autorefractor format only. The handheld format is deferred to a post-trip phase due to dramatically more complex OCR characteristics (8 readings per eye, ambiguous markers, smaller font, tighter spacing).
+
+Volunteers should be instructed to use the desktop machine as the primary instrument. If only the handheld is available, the operator must record the prescription manually using the existing FileMaker workflow.
+
+Format detection:
+- Desktop: presence of `GRK-6000` or `Highlands Optical` in OCR text
+- Handheld: presence of `[R]` or `-REF-` without `GRK-6000` marker
+- Unknown: present error to operator, do not attempt parse
+
+The user has multiple desktop printout photos available for testing. Wait for the user to provide one before claiming desktop extraction works — do not invent synthetic desktop fixtures (per memory `feedback_test_fixtures_real_data.md`).
+
 ## Persistence Architecture
 
 ### App-rooted DI

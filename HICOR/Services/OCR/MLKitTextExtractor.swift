@@ -52,78 +52,61 @@ final class MLKitTextExtractor: TextExtracting {
             }
         }
 
-        let boxes = Self.toTextBoxes(result, imageSize: image.size)
-        let rowBased = Self.nativeRowLines(from: result, imageSize: image.size)
-        let thresholds = VisionTextExtractor.computeAdaptiveThresholds(from: boxes)
-        return ExtractedText(
-            rowBased: rowBased,
-            columnBased: VisionTextExtractor.reconstructColumnarLines(
-                from: boxes,
-                columnGapThreshold: thresholds.columnGapThreshold,
-                rowTolerance: thresholds.rowTolerance
-            ),
-            preprocessedImageData: image.jpegData(compressionQuality: 0.85),
-            boxes: boxes,
-            revisionUsed: 0,
-            variant: variant
-        )
-    }
-
-    /// Emit every ML Kit line as-is in natural page order. ML Kit already groups
-    /// tokens into lines correctly for thermal printouts (atomic decimals, one
-    /// reading per line). `VisionTextExtractor.reconstructRows` was built to
-    /// re-stitch Vision's fragmented observations and coalesces ML Kit lines
-    /// that share a Y band, collapsing 20+ printed rows into ~7. Sort in
-    /// ML Kit's native top-left coordinate system: smaller Y is higher on the
-    /// page, so ascending Y sort = top-to-bottom reading order. X tiebreak
-    /// within a 0.015 band captures lines that truly share a row (e.g. a
-    /// reading and its inline axis label).
-    ///
-    /// Do NOT flip Y here. The parent `toTextBoxes` still flips because
-    /// `reconstructColumnarLines` was written against Vision's bottom-left
-    /// convention, but `nativeRowLines` never calls into that code path.
-    private static func nativeRowLines(from text: Text, imageSize: CGSize) -> [String] {
-        guard imageSize.width > 0, imageSize.height > 0 else { return [] }
-        struct Entry { let y: CGFloat; let x: CGFloat; let text: String }
-        var entries: [Entry] = []
-        for block in text.blocks {
-            for line in block.lines {
-                let y = line.frame.midY / imageSize.height
-                let x = line.frame.minX / imageSize.width
-                entries.append(Entry(y: y, x: x, text: line.text))
+        // Verbose diagnostic logging — temporary, will remove once
+        // reconstruction is stable.
+        print("=== ML Kit Raw Structure ===")
+        print("Image size: \(image.size)")
+        print("Blocks: \(result.blocks.count)")
+        for (bi, block) in result.blocks.enumerated() {
+            print("Block \(bi): frame=\(block.frame) lines=\(block.lines.count)")
+            for (li, line) in block.lines.enumerated() {
+                print("  Line \(bi).\(li): frame=\(line.frame) text='\(line.text)'")
             }
         }
-        entries.sort { a, b in
-            if abs(a.y - b.y) < 0.015 { return a.x < b.x }
-            return a.y < b.y
-        }
-        return entries.map(\.text)
-    }
+        print("=== End ML Kit Raw ===")
 
-    /// Maps ML Kit's `Text` to the Vision-style `TextBox` array the existing
-    /// reconstruction statics expect. ML Kit returns line frames in pixel
-    /// coordinates with top-left origin; `TextBox` is normalized 0–1 with
-    /// bottom-left origin. The Y-flip is essential — without it row sorting
-    /// reverses and `[R]` lands below `[L]`.
-    ///
-    /// ML Kit v2's Swift API does not expose per-line confidence, so all
-    /// boxes get `confidence: 1.0`. This makes `ParseScorer.wConfidence`
-    /// uniform across the row/column comparison; the other three weights
-    /// drive selection.
-    private static func toTextBoxes(_ text: Text, imageSize: CGSize) -> [TextBox] {
-        guard imageSize.width > 0, imageSize.height > 0 else { return [] }
-        return text.blocks.flatMap { block in
-            block.lines.map { line -> TextBox in
-                let frame = line.frame
-                return TextBox(
-                    midX: frame.midX / imageSize.width,
-                    midY: 1.0 - frame.midY / imageSize.height,
-                    minX: frame.minX / imageSize.width,
-                    height: frame.height / imageSize.height,
+        // Temporary strategy: sort BLOCKS by top-Y, then emit each block's
+        // lines in their natural within-block order. ML Kit typically gets
+        // intra-block order right; the prior top-level Y sort across all
+        // lines was producing scrambled output on the handheld printout.
+        // We'll revisit after the device logs reveal how block/line frames
+        // actually lay out on a real desktop printout.
+        let sortedBlocks = result.blocks.sorted {
+            $0.frame.minY < $1.frame.minY
+        }
+
+        var rowBased: [String] = []
+        for block in sortedBlocks {
+            for line in block.lines {
+                rowBased.append(line.text)
+            }
+        }
+
+        // Temporary: column-based mirrors row-based until row reconstruction
+        // is proven. Vision's columnar reconstruction is bypassed entirely
+        // in this diagnostic pass.
+        let columnBased = rowBased
+
+        let boxes = result.blocks.flatMap { block in
+            block.lines.map { line in
+                TextBox(
+                    midX: line.frame.midX / image.size.width,
+                    midY: line.frame.midY / image.size.height,
+                    minX: line.frame.minX / image.size.width,
+                    height: line.frame.height / image.size.height,
                     text: line.text,
                     confidence: 1.0
                 )
             }
         }
+
+        return ExtractedText(
+            rowBased: rowBased,
+            columnBased: columnBased,
+            preprocessedImageData: image.jpegData(compressionQuality: 0.85),
+            boxes: boxes,
+            revisionUsed: 0,
+            variant: variant
+        )
     }
 }
