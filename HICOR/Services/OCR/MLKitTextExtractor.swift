@@ -56,6 +56,7 @@ final class MLKitTextExtractor: TextExtracting {
         // reconstruction is stable.
         print("=== ML Kit Raw Structure ===")
         print("Image size: \(image.size)")
+        print("Image orientation: \(image.imageOrientation.rawValue)")
         print("Blocks: \(result.blocks.count)")
         for (bi, block) in result.blocks.enumerated() {
             print("Block \(bi): frame=\(block.frame) lines=\(block.lines.count)")
@@ -65,23 +66,54 @@ final class MLKitTextExtractor: TextExtracting {
         }
         print("=== End ML Kit Raw ===")
 
-        // Temporary strategy: sort BLOCKS by top-Y, then emit each block's
-        // lines in their natural within-block order. ML Kit typically gets
-        // intra-block order right; the prior top-level Y sort across all
-        // lines was producing scrambled output on the handheld printout.
-        // We'll revisit after the device logs reveal how block/line frames
-        // actually lay out on a real desktop printout.
-        let sortedBlocks = result.blocks.sorted {
-            $0.frame.minY < $1.frame.minY
-        }
+        // Detect document orientation relative to the image.
+        // Real-device captures of the GRK-6000 desktop printout come in as a
+        // 3024×4032 portrait image even though the printout itself was
+        // photographed landscape — so the document's top edge runs down the
+        // image's LEFT side. Sorting by frame.minY in that case reads the
+        // document right-to-left. When the image is landscape (width > height)
+        // the document is correctly oriented and the natural Y-then-X sort
+        // applies. This is a heuristic for typical capture orientation; once
+        // we have more device data we can replace it with anchor-text-based
+        // detection (e.g. locating "AVG" or "GAK-6000" markers).
+        let isImagePortrait = image.size.height > image.size.width
 
-        var rowBased: [String] = []
-        for block in sortedBlocks {
+        struct Entry { let primary: CGFloat; let secondary: CGFloat; let text: String }
+        var entries: [Entry] = []
+        for block in result.blocks {
             for line in block.lines {
-                rowBased.append(line.text)
+                if isImagePortrait {
+                    // Document rotated 90° in a portrait image:
+                    //   image X (left → right) = document Y (top → bottom)
+                    //   image Y (top → bottom) = document X (left → right)
+                    entries.append(Entry(
+                        primary: line.frame.minX,
+                        secondary: line.frame.minY,
+                        text: line.text
+                    ))
+                } else {
+                    entries.append(Entry(
+                        primary: line.frame.minY,
+                        secondary: line.frame.minX,
+                        text: line.text
+                    ))
+                }
             }
         }
 
+        // Tolerance is in raw image pixels, so it scales naturally with
+        // capture resolution. ~50 px on a 3024×4032 image is roughly one
+        // line-height; lines that share a row collapse together and tiebreak
+        // on the secondary axis (left-to-right within the row).
+        let rowTolerance: CGFloat = 50.0
+        entries.sort { a, b in
+            if abs(a.primary - b.primary) < rowTolerance {
+                return a.secondary < b.secondary
+            }
+            return a.primary < b.primary
+        }
+
+        let rowBased = entries.map(\.text)
         // Temporary: column-based mirrors row-based until row reconstruction
         // is proven. Vision's columnar reconstruction is bypassed entirely
         // in this diagnostic pass.
