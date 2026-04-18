@@ -16,7 +16,8 @@
 
 Run these from the repo root (`/Users/scott/Projects/HICOR`):
 
-- Regenerate Xcode project after adding/removing files: `xcodegen generate`
+- Regenerate Xcode project after adding/removing files: `xcodegen generate && pod install`
+  - **IMPORTANT:** `pod install` is not optional. `xcodegen generate` overwrites `HICOR.xcodeproj`, wiping out the CocoaPods xcconfig integration. Without a follow-up `pod install`, every subsequent build fails with `Unable to find module dependency: 'MLKitTextRecognition'`. Always chain the two. `pod install` with an unchanged Podfile.lock finishes in ~2 seconds.
 - Build (no signing, simulator target): `xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO`
 - Run all tests on simulator: `xcodebuild test -workspace HICOR.xcworkspace -scheme HICOR -destination 'platform=iOS Simulator,name=iPhone 16 Pro' CODE_SIGNING_ALLOWED=NO`
 - Run one test class: append `-only-testing:HICORTests/<TestClassName>` to the test command (e.g., `-only-testing:HICORTests/ImageEnhancerTests`)
@@ -101,10 +102,10 @@ mkdir -p HICOR/Services/OCR/Preprocessing \
 touch HICORTests/OCR/Fixtures/Images/grk6000/.gitkeep
 ```
 
-- [ ] **Step 2: Regenerate project.**
+- [ ] **Step 2: Regenerate project and re-integrate Pods.**
 
-Run: `xcodegen generate`
-Expected: `Generated project successfully.`
+Run: `xcodegen generate && pod install`
+Expected: `Generated project successfully.` then `Pod installation complete!`
 
 - [ ] **Step 3: Sanity build.**
 
@@ -277,7 +278,7 @@ enum ImageEnhancer {
 
 Run:
 ```bash
-xcodegen generate
+xcodegen generate && pod install
 xcodebuild test -workspace HICOR.xcworkspace -scheme HICOR \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
   CODE_SIGNING_ALLOWED=NO \
@@ -469,7 +470,7 @@ enum DocumentRectifier {
 
 Run:
 ```bash
-xcodegen generate
+xcodegen generate && pod install
 xcodebuild test -workspace HICOR.xcworkspace -scheme HICOR \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
   CODE_SIGNING_ALLOWED=NO \
@@ -697,7 +698,7 @@ struct CellLayout {
 
 - [ ] **Step 5: Run tests.**
 
-Run: `xcodegen generate && xcodebuild test ... -only-testing:HICORTests/CellLayoutTests 2>&1 | tail -15`
+Run: `xcodegen generate && pod install && xcodebuild test ... -only-testing:HICORTests/CellLayoutTests 2>&1 | tail -15`
 Expected: six tests passing.
 
 - [ ] **Step 6: Commit.**
@@ -823,7 +824,7 @@ enum CellROIExtractor {
 
 - [ ] **Step 4: Run tests.**
 
-Run: `xcodegen generate && xcodebuild test ... -only-testing:HICORTests/CellROIExtractorTests 2>&1 | tail -10`
+Run: `xcodegen generate && pod install && xcodebuild test ... -only-testing:HICORTests/CellROIExtractorTests 2>&1 | tail -10`
 Expected: four tests passing.
 
 - [ ] **Step 5: Commit.**
@@ -898,7 +899,7 @@ final class MLKitLineRecognizer: LineRecognizing {
 
 - [ ] **Step 2: Build.**
 
-Run: `xcodegen generate && xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5`
+Run: `xcodegen generate && pod install && xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5`
 Expected: `** BUILD SUCCEEDED **`.
 
 - [ ] **Step 3: Commit.**
@@ -1155,7 +1156,7 @@ final class AnchorDetector {
 
 - [ ] **Step 4: Run tests.**
 
-Run: `xcodegen generate && xcodebuild test ... -only-testing:HICORTests/AnchorDetectorTests 2>&1 | tail -15`
+Run: `xcodegen generate && pod install && xcodebuild test ... -only-testing:HICORTests/AnchorDetectorTests 2>&1 | tail -15`
 Expected: four tests passing.
 
 - [ ] **Step 5: Commit.**
@@ -1356,7 +1357,7 @@ final class CellOCR {
 
 - [ ] **Step 4: Run tests.**
 
-Run: `xcodegen generate && xcodebuild test ... -only-testing:HICORTests/CellOCRTests 2>&1 | tail -15`
+Run: `xcodegen generate && pod install && xcodebuild test ... -only-testing:HICORTests/CellOCRTests 2>&1 | tail -15`
 Expected: seven tests passing.
 
 - [ ] **Step 5: Commit.**
@@ -1765,7 +1766,7 @@ Edit `HICOR/Services/OCR/ROI/Anchors.swift` to replace the auto-synthesized `Cel
 
 Run:
 ```bash
-xcodegen generate
+xcodegen generate && pod install
 xcodebuild test -workspace HICOR.xcworkspace -scheme HICOR \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
   CODE_SIGNING_ALLOWED=NO \
@@ -2046,7 +2047,7 @@ final class CaptureModel: NSObject, ObservableObject, AVCapturePhotoCaptureDeleg
 
 - [ ] **Step 2: Build.**
 
-Run: `xcodegen generate && xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5`
+Run: `xcodegen generate && pod install && xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5`
 Expected: `** BUILD SUCCEEDED **`.
 
 - [ ] **Step 3: Commit.**
@@ -2103,7 +2104,7 @@ Run: `rm HICOR/Views/CameraPickerView.swift`
 
 - [ ] **Step 3: Regenerate and build.**
 
-Run: `xcodegen generate && xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5`
+Run: `xcodegen generate && pod install && xcodebuild -workspace HICOR.xcworkspace -scheme HICOR -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -5`
 Expected: `** BUILD SUCCEEDED **`. If there's a reference to `CameraPickerView` elsewhere, the build will fail with `cannot find 'CameraPickerView' in scope` — grep the repo for that symbol and fix any leftover usage.
 
 - [ ] **Step 4: Run full test sweep.**
@@ -2417,7 +2418,7 @@ final class ROIPipelineFixtureTests: XCTestCase {
 
 Run:
 ```bash
-xcodegen generate
+xcodegen generate && pod install
 xcodebuild test -workspace HICOR.xcworkspace -scheme HICOR \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
   CODE_SIGNING_ALLOWED=NO \
