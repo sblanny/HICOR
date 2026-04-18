@@ -47,11 +47,14 @@ enum ReadingNormalizer {
     }
 
     /// Split merged numeric tokens ML Kit emits when adjacent columns
-    /// collapse. Two shapes observed on the GRK-6000 desktop printout:
+    /// collapse. Three shapes observed on the GRK-6000 desktop printout:
     ///   "3.00-3.75" — SPH and CYL fused with the minus sign between them;
     ///                 split into ["3.00", "-3.75"] so CYL keeps its sign.
     ///   "3.25-"     — trailing dash from the next row's sign-column leaks
     ///                 onto this row's SPH token; drop the dash.
+    ///   "3.7517"    — decimal and axis column collapse (no separator at
+    ///                 all); split into ["3.75", "17"] when the trailing
+    ///                 digits fall in the legal axis range (1-180).
     /// All other tokens pass through unchanged.
     static func splitMergedNumerics(_ token: String) -> [String] {
         let joined = #"^(\d{1,2}\.\d{2})-(\d{1,2}\.\d{2})$"#
@@ -74,6 +77,18 @@ enum ReadingNormalizer {
            match.numberOfRanges == 2,
            let r1 = Range(match.range(at: 1), in: token) {
             return [String(token[r1])]
+        }
+        let decimalAxis = #"^(\d{1,2}\.\d{2})(\d{1,3})$"#
+        if let regex = try? NSRegularExpression(pattern: decimalAxis),
+           let match = regex.firstMatch(
+               in: token,
+               range: NSRange(token.startIndex..., in: token)
+           ),
+           match.numberOfRanges == 3,
+           let r1 = Range(match.range(at: 1), in: token),
+           let r2 = Range(match.range(at: 2), in: token),
+           let ax = Int(String(token[r2])), ax >= 1, ax <= 180 {
+            return [String(token[r1]), String(token[r2])]
         }
         return [token]
     }
@@ -134,6 +149,17 @@ enum ReadingNormalizer {
         // Comma → period. ML Kit occasionally emits "0,75" instead of "0.75"
         // on thermal captures (European-locale glyph confusion).
         s = s.replacingOccurrences(of: ",", with: ".")
+
+        // Leading-zero repair. ML Kit occasionally drops the leading "0"
+        // from sub-unit decimals on tight thermal cells, so "-0.25" comes
+        // back as ".25" and "-.25" as "-.25". The shape gate wants at least
+        // one digit before the decimal, so we reinsert the zero — preserving
+        // any sign prefix so the parser's sign-combination logic still works.
+        if s.hasPrefix("-.") || s.hasPrefix("+.") {
+            s = String(s.first!) + "0" + s.dropFirst()
+        } else if s.hasPrefix(".") {
+            s = "0" + s
+        }
 
         // Dropped-decimal repair. ML Kit occasionally loses the decimal point
         // on thermal-paper decimals like "4.25" → "425", leaving a bare 3-
