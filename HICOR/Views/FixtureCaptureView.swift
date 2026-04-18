@@ -2,13 +2,14 @@
 import SwiftUI
 import UIKit
 
-/// DEBUG-only tool to collect real GRK-6000 fixture captures for the test
-/// corpus. Flow: pick a subdir → enter the 24 readings printed on the slip →
-/// take one or more photos → app writes matching `case-<ts>.jpg` + `.json`
-/// into `Documents/fixtures/<subdir>/`. The Documents folder is exposed to
-/// the Files app (UIFileSharingEnabled + LSSupportsOpeningDocumentsInPlace),
-/// so files can be AirDropped to the Mac and dropped into
+/// DEBUG-only tool to collect real GRK-6000 fixture captures. Flow: pick a
+/// subdir → enter the 24 printed readings once → take a photo → a share
+/// sheet immediately pops up with `case-<ts>.jpg` + matching `.json`; pick
+/// AirDrop → your Mac. Drop the pair into
 /// `HICORTests/OCR/Fixtures/Images/grk6000/<subdir>/`.
+///
+/// Files are also staged under `Documents/fixtures/<subdir>/` as a backup
+/// so you can re-export in one batch later via "Export all".
 struct FixtureCaptureView: View {
 
     enum Subdir: String, CaseIterable, Identifiable {
@@ -30,8 +31,10 @@ struct FixtureCaptureView: View {
     @State private var draftReadings = ReadingsForm()
     @State private var session: Session?
     @State private var showingCamera = false
-    @State private var lastSavedStem: String?
+    @State private var pendingShareURLs: [URL] = []
+    @State private var showingShareSheet = false
     @State private var errorMessage: String?
+    @State private var lastSavedStem: String?
     @State private var counts: [Subdir: Int] = [:]
 
     var body: some View {
@@ -42,7 +45,6 @@ struct FixtureCaptureView: View {
                 } else {
                     setupSection
                 }
-
                 corpusStatusSection
             }
             .navigationTitle("Fixture Capture")
@@ -58,10 +60,13 @@ struct FixtureCaptureView: View {
                 )
                 .ignoresSafeArea()
             }
+            .sheet(isPresented: $showingShareSheet) {
+                ActivityView(items: pendingShareURLs)
+            }
         }
     }
 
-    // MARK: - Setup (no session)
+    // MARK: - Setup (no active session)
 
     private var setupSection: some View {
         Group {
@@ -79,7 +84,7 @@ struct FixtureCaptureView: View {
                 readingsEditor(form: $draftReadings)
             } else {
                 Section {
-                    Text("dim_poor_framing fixtures are expected to fail extraction. No reading values needed; JSON will be written with shouldFail: true.")
+                    Text("dim_poor_framing fixtures are expected to fail extraction. JSON will be written with shouldFail: true — no readings needed.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -93,6 +98,20 @@ struct FixtureCaptureView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button {
+                    exportAll()
+                } label: {
+                    Label("Export all previous captures", systemImage: "square.and.arrow.up.on.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled((counts.values.reduce(0, +)) == 0)
+            }
+
+            if let errorMessage {
+                Section {
+                    Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                }
             }
         }
     }
@@ -114,16 +133,14 @@ struct FixtureCaptureView: View {
     @ViewBuilder
     private func sessionActiveSection(_ current: Session) -> some View {
         Section("Current session") {
-            LabeledContent("Subdir") {
-                Text(current.subdir.display)
-            }
+            LabeledContent("Subdir") { Text(current.subdir.display) }
             if current.subdir.shouldFail {
                 Text("shouldFail: true (no readings)").font(.footnote).foregroundStyle(.secondary)
             } else {
                 Text("24 readings locked in").font(.footnote).foregroundStyle(.secondary)
             }
             if let lastSavedStem {
-                Text("Saved: \(lastSavedStem).jpg + .json").font(.footnote).foregroundStyle(.green)
+                Text("Saved: \(lastSavedStem)").font(.footnote).foregroundStyle(.green)
             }
             if let errorMessage {
                 Text(errorMessage).font(.footnote).foregroundStyle(.red)
@@ -138,6 +155,15 @@ struct FixtureCaptureView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+
+            if !pendingShareURLs.isEmpty {
+                Button {
+                    showingShareSheet = true
+                } label: {
+                    Label("Re-open share sheet for last capture", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+            }
 
             Button(role: .destructive) {
                 session = nil
@@ -189,7 +215,7 @@ struct FixtureCaptureView: View {
     // MARK: - Corpus status
 
     private var corpusStatusSection: some View {
-        Section("Corpus on device") {
+        Section("Corpus staged on device") {
             ForEach(Subdir.allCases) { dir in
                 HStack {
                     Text(dir.display)
@@ -197,18 +223,18 @@ struct FixtureCaptureView: View {
                     Text("\(counts[dir] ?? 0)").monospacedDigit().foregroundStyle(.secondary)
                 }
             }
-            Text("Files live at On My iPhone → HICOR → fixtures/. AirDrop to your Mac.")
+            Text("Each capture pops a share sheet — AirDrop to your Mac, then drop the pair into HICORTests/OCR/Fixtures/Images/grk6000/<subdir>/.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - Persistence
+    // MARK: - Save + share
 
     private func savePhoto(_ image: UIImage) {
         guard let session else { return }
         errorMessage = nil
         do {
-            let stem = "case-\(Int(Date().timeIntervalSince1970))"
+            let stem = "\(session.subdir.rawValue)-case-\(Int(Date().timeIntervalSince1970))"
             let dir = try fixturesDir(for: session.subdir)
             let jpgURL = dir.appendingPathComponent("\(stem).jpg")
             let jsonURL = dir.appendingPathComponent("\(stem).json")
@@ -222,19 +248,57 @@ struct FixtureCaptureView: View {
             )
             try jsonData.write(to: jsonURL, options: .atomic)
             lastSavedStem = stem
+            pendingShareURLs = [jpgURL, jsonURL]
             refreshCounts()
+            // Present share sheet on the next runloop tick so the camera's
+            // fullScreenCover has fully dismissed first.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showingShareSheet = true
+            }
         } catch {
             errorMessage = "Save failed: \(error.localizedDescription)"
         }
     }
 
-    private func fixturesDir(for subdir: Subdir) throws -> URL {
+    private func exportAll() {
+        errorMessage = nil
+        do {
+            let root = try rootDir()
+            let urls = try collectFixtureURLs(under: root)
+            guard !urls.isEmpty else {
+                errorMessage = "No captures staged yet."
+                return
+            }
+            pendingShareURLs = urls
+            showingShareSheet = true
+        } catch {
+            errorMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func collectFixtureURLs(under root: URL) throws -> [URL] {
+        var out: [URL] = []
+        for dir in Subdir.allCases {
+            let subdirURL = root.appendingPathComponent(dir.rawValue, isDirectory: true)
+            let contents = (try? FileManager.default.contentsOfDirectory(at: subdirURL, includingPropertiesForKeys: nil)) ?? []
+            for url in contents where ["jpg", "json"].contains(url.pathExtension.lowercased()) {
+                out.append(url)
+            }
+        }
+        return out.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    private func rootDir() throws -> URL {
         let docs = try FileManager.default.url(
             for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true
         )
-        let dir = docs
-            .appendingPathComponent("fixtures", isDirectory: true)
-            .appendingPathComponent(subdir.rawValue, isDirectory: true)
+        let root = docs.appendingPathComponent("fixtures", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    private func fixturesDir(for subdir: Subdir) throws -> URL {
+        let dir = try rootDir().appendingPathComponent(subdir.rawValue, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -292,5 +356,13 @@ struct ReadingsForm {
             ]
         ]
     }
+}
+
+private struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 #endif
