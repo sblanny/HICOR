@@ -55,6 +55,7 @@ targets:
       - path: HICORTests
     resources:
       - path: HICORTests/OCR/Fixtures
+        type: folder
         optional: true
     dependencies:
       - target: HICOR

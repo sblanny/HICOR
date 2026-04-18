@@ -28,10 +28,12 @@ struct CellLayout {
         let headerMidY = (section.sph.midY + section.cyl.midY + section.ax.midY) / 3.0
         let avgMidY    = section.avg.midY
 
-        // Four row-midYs equally spaced between headerMidY (excluded) and
-        // avgMidY. r1 sits one step below the header, r2 two steps, r3 three
-        // steps, avg four steps (== avgMidY).
-        let rowStep = (avgMidY - headerMidY) / 4.0
+        // GRK-6000 packs the three reading rows close together then leaves a
+        // double-row gap before AVG. Measured ratio across captures is 1:2:3:5
+        // from the header baseline (reading rows 1-3 equally spaced, AVG one
+        // extra row-step below r3). Using 1:2:3:4 makes r2/r3 undershoot by
+        // ~50-70px on dim captures and misses those cells entirely.
+        let rowStep = (avgMidY - headerMidY) / 5.0
         let rowMidYs: [(CellROI.Row, CGFloat)] = [
             (.r1,  headerMidY + rowStep * 1.0),
             (.r2,  headerMidY + rowStep * 2.0),

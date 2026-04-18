@@ -3,7 +3,9 @@ import UIKit
 @testable import HICOR
 
 private struct PassthroughRecognizer: LineRecognizing {
-    func recognize(_ image: UIImage) async throws -> [OCRLine] { [] }
+    let lines: [OCRLine]
+    init(lines: [OCRLine] = []) { self.lines = lines }
+    func recognize(_ image: UIImage) async throws -> [OCRLine] { lines }
 }
 
 /// Stubs everything the orchestrator calls through: rectifier, enhancer,
@@ -15,6 +17,12 @@ private final class StubAnchorDetector: AnchorDetector {
         super.init(recognizer: PassthroughRecognizer())
     }
     override func detectAnchors(in image: UIImage) async throws -> Anchors {
+        switch result {
+        case .success(let a): return a
+        case .failure(let e): throw e
+        }
+    }
+    override func detectAnchors(from lines: [OCRLine]) throws -> Anchors {
         switch result {
         case .success(let a): return a
         case .failure(let e): throw e
@@ -87,6 +95,7 @@ final class ROIPipelineExtractorTests: XCTestCase {
         let extractor = ROIPipelineExtractor(
             rectify: { _ in self.blankImage() },
             enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
             anchorDetector: StubAnchorDetector(result: .success(anchors)),
             cellOCR: ScriptedCellOCR(table: fullCellTable(anchors: anchors)),
             fallback: StubFallback(output: .empty)
@@ -104,6 +113,7 @@ final class ROIPipelineExtractorTests: XCTestCase {
         let extractor = ROIPipelineExtractor(
             rectify: { _ in nil },
             enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
             anchorDetector: StubAnchorDetector(
                 result: .failure(AnchorDetector.Error.insufficientAnchors(missing: []))),
             cellOCR: ScriptedCellOCR(table: [:]),
@@ -124,6 +134,7 @@ final class ROIPipelineExtractorTests: XCTestCase {
         let extractor = ROIPipelineExtractor(
             rectify: { $0 },
             enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
             anchorDetector: StubAnchorDetector(
                 result: .failure(AnchorDetector.Error.insufficientAnchors(missing: ["right SPH"]))),
             cellOCR: ScriptedCellOCR(table: [:]),
@@ -149,6 +160,7 @@ final class ROIPipelineExtractorTests: XCTestCase {
         let extractor = ROIPipelineExtractor(
             rectify: { $0 },
             enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
             anchorDetector: StubAnchorDetector(result: .success(anchors)),
             cellOCR: ScriptedCellOCR(table: table),
             fallback: StubFallback(output: .empty)

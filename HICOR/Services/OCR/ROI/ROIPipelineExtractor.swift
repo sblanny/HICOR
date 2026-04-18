@@ -7,6 +7,7 @@ final class ROIPipelineExtractor: TextExtracting {
 
     private let rectify: RectifyFn
     private let enhance: EnhanceFn
+    private let lineRecognizer: LineRecognizing
     private let anchorDetector: AnchorDetector
     private let cellOCR: CellOCR
     private let fallback: TextExtracting
@@ -16,6 +17,7 @@ final class ROIPipelineExtractor: TextExtracting {
     init(
         rectify: @escaping RectifyFn = DocumentRectifier.rectify,
         enhance: @escaping EnhanceFn = ImageEnhancer.enhance,
+        lineRecognizer: LineRecognizing? = nil,
         anchorDetector: AnchorDetector? = nil,
         cellOCR: CellOCR? = nil,
         fallback: TextExtracting = MLKitTextExtractor(),
@@ -24,7 +26,8 @@ final class ROIPipelineExtractor: TextExtracting {
     ) {
         self.rectify = rectify
         self.enhance = enhance
-        let recognizer = MLKitLineRecognizer()
+        let recognizer = lineRecognizer ?? MLKitLineRecognizer()
+        self.lineRecognizer = recognizer
         self.anchorDetector = anchorDetector ?? AnchorDetector(recognizer: recognizer)
         self.cellOCR = cellOCR ?? CellOCR(recognizer: recognizer)
         self.fallback = fallback
@@ -33,37 +36,60 @@ final class ROIPipelineExtractor: TextExtracting {
     }
 
     func extractText(from image: UIImage) async throws -> ExtractedText {
-        guard let rectified = await rectify(image) else {
+        // Rectification disabled 2026-04-18: Vision rectangle detection
+        // consistently corrupts the image on the real GRK-6000 fixtures
+        // (ML Kit then finds only ~3 tokens on the rectified output). The
+        // framing guide now does the work of keeping the slip roughly
+        // square-to-camera; we operate on the raw capture instead.
+        _ = await rectify  // retain storage ref for tests; unused in prod path
+        print("ROIPipeline: input size=\(image.size) orientation=\(image.imageOrientation.rawValue)")
+        let oriented = orientSlipToPortrait(image)
+        print("ROIPipeline: oriented size=\(oriented.size)")
+        let enhanced = enhance(oriented, .standard)
+        print("ROIPipeline: enhanced size=\(enhanced.size)")
+
+        // Run ML Kit once against the full enhanced image and reuse the
+        // element list for both anchor detection and per-cell value picking.
+        // Per-cell re-OCR on narrow column crops is unreliable — ML Kit
+        // needs surrounding context and often yields nothing on a crop it
+        // reads cleanly at full size.
+        let lines: [OCRLine]
+        do {
+            lines = try await lineRecognizer.recognize(enhanced)
+        } catch {
+            print("ROIPipeline: line recognition failed \(error) → fallback")
             return try await fallbackOrThrow(image)
         }
 
-        let enhanced = enhance(rectified, .standard)
-
         let anchors: Anchors
         do {
-            anchors = try await anchorDetector.detectAnchors(in: enhanced)
+            anchors = try anchorDetector.detectAnchors(from: lines)
+            print("ROIPipeline: anchors detected r.eye=\(anchors.right.eyeMarker) r.avg=\(anchors.right.avg) l.eye=\(anchors.left.eyeMarker) l.avg=\(anchors.left.avg)")
         } catch {
+            print("ROIPipeline: anchor detection failed \(error) → fallback")
             return try await fallbackOrThrow(image)
         }
 
         let cells = layout.cells(given: anchors)
-        let crops = CellROIExtractor.crop(image: enhanced, cells: cells, paddingFraction: paddingFraction)
+        let (pickedValues, unresolved) = pickCellValues(cells: cells, lines: lines)
+        print("ROIPipeline: element-picked \(pickedValues.count) / \(cells.count); unresolved=\(unresolved.count)")
 
-        var values: [CellROI: String] = [:]
-        var missing: [String] = []
-        for (cell, crop) in crops {
-            if let value = await cellOCR.read(cell: cell, image: crop) {
-                values[cell] = value
-            } else {
-                missing.append(cellLabel(cell))
+        var values = pickedValues
+        // For any cell the full-image pass could not populate, fall back to
+        // cropping that cell and re-running ML Kit with aggressive
+        // enhancement. Covers cases where a value token was fused with an
+        // adjacent one at full size (e.g. "-1.00172" = CYL + AX merged).
+        if !unresolved.isEmpty {
+            let crops = CellROIExtractor.crop(image: enhanced, cells: unresolved, paddingFraction: paddingFraction)
+            for (cell, crop) in crops {
+                if let value = await cellOCR.read(cell: cell, image: crop) {
+                    values[cell] = value
+                }
             }
         }
-        // Any cell that didn't even get cropped (rectangle fell entirely
-        // outside the image bounds) is also missing.
-        let croppedSet = Set(crops.map { $0.0 })
-        for cell in cells where !croppedSet.contains(cell) {
-            missing.append(cellLabel(cell))
-        }
+
+        let missing = cells.filter { values[$0] == nil }.map(cellLabel)
+        print("ROIPipeline: values=\(values.count) missing=\(missing.count) missingLabels=\(missing)")
 
         if !missing.isEmpty {
             throw OCRService.OCRError.incompleteCells(missing: missing)
@@ -90,36 +116,65 @@ final class ROIPipelineExtractor: TextExtracting {
 
     // MARK: - Private helpers
 
-    private func fallbackOrThrow(_ image: UIImage) async throws -> ExtractedText {
-        let fbText = try await fallback.extractText(from: image)
-        if fbText.rowBased.isEmpty {
-            throw OCRService.OCRError.incompleteCells(missing: ["fallback produced no text"])
+    /// For each cell, find the full-image element whose center lies inside
+    /// the cell rectangle and whose text passes the column's shape check.
+    /// If several match, prefer the one closest to the cell center. Returns
+    /// the resolved values plus the list of cells still unresolved (caller
+    /// can fall back to per-cell re-OCR).
+    private func pickCellValues(
+        cells: [CellROI],
+        lines: [OCRLine]
+    ) -> ([CellROI: String], [CellROI]) {
+        var resolved: [CellROI: String] = [:]
+        var unresolved: [CellROI] = []
+        for cell in cells {
+            let inside = lines.filter { cell.rect.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
+            let passing = inside.compactMap { line -> (OCRLine, String)? in
+                let trimmed = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return matchesShape(trimmed, for: cell.column) ? (line, trimmed) : nil
+            }
+            if let best = passing.min(by: { lhs, rhs in
+                let dl = hypot(lhs.0.frame.midX - cell.rect.midX, lhs.0.frame.midY - cell.rect.midY)
+                let dr = hypot(rhs.0.frame.midX - cell.rect.midX, rhs.0.frame.midY - cell.rect.midY)
+                return dl < dr
+            }) {
+                resolved[cell] = best.1
+            } else {
+                unresolved.append(cell)
+            }
         }
-        let missing = fallbackMissingCells(fbText.rowBased)
-        if !missing.isEmpty {
-            throw OCRService.OCRError.incompleteCells(missing: missing)
-        }
-        return fbText
+        return (resolved, unresolved)
     }
 
-    /// Checks that fallback output contains the expected structure: one
-    /// section marker per eye plus four data lines per eye (3 readings + AVG).
-    /// Returns a list of human-readable missing-section labels.
-    private func fallbackMissingCells(_ lines: [String]) -> [String] {
-        var missing: [String] = []
-        for (marker, eyeLabel) in [("[R]", "right"), ("[L]", "left")] {
-            guard let idx = lines.firstIndex(of: marker) else {
-                missing.append("\(eyeLabel) section marker")
-                continue
-            }
-            let sectionEnd = min(idx + 5, lines.count)
-            let section = Array(lines[(idx + 1)..<sectionEnd])
-            let readingLines = section.filter { !$0.hasPrefix("AVG") && !$0.isEmpty }
-            let avgLines = section.filter { $0.hasPrefix("AVG") }
-            if readingLines.count < 3 { missing.append("\(eyeLabel) readings (<3)") }
-            if avgLines.isEmpty { missing.append("\(eyeLabel) AVG") }
+    private func matchesShape(_ value: String, for column: CellROI.Column) -> Bool {
+        switch column {
+        case .sph, .cyl:
+            let range = NSRange(value.startIndex..., in: value)
+            return ROIPipelineExtractor.decimalRegex.firstMatch(in: value, range: range) != nil
+        case .ax:
+            guard let n = Int(value) else { return false }
+            return n >= 1 && n <= 180
         }
-        return missing
+    }
+
+    // Shape regex mirrors CellOCR's. Duplicated here (not shared) because
+    // the two have different downstream contracts: CellOCR's regex governs
+    // a single re-OCR crop, while this one gates element picking against
+    // the full-image line list where whole-number angles (AX) coexist with
+    // decimal sphere/cyl values.
+    private static let decimalRegex: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"^[-+]?(?:\d{1,2}\.\d{2}|\d{2,4})$"#)
+    }()
+
+    private func fallbackOrThrow(_ image: UIImage) async throws -> ExtractedText {
+        let fbText = try await fallback.extractText(from: image)
+        print("ROIPipeline: fallback rowBased (\(fbText.rowBased.count) lines):")
+        for line in fbText.rowBased { print("  | \(line)") }
+        // Anchor-detection failure on a thermal GRK-6000 slip means the
+        // capture is unusable — trying to reconstruct readings from the
+        // fallback extractor's row-based text is unreliable on this layout.
+        // Throw incompleteCells so the UI prompts the user to recapture.
+        throw OCRService.OCRError.incompleteCells(missing: ["anchor detection failed — recapture required"])
     }
 
     private func assembleRowLines(values: [CellROI: String]) -> [String] {
@@ -139,5 +194,20 @@ final class ROIPipelineExtractor: TextExtracting {
 
     private func cellLabel(_ cell: CellROI) -> String {
         "\(cell.eye.rawValue) \(cell.column.rawValue) \(cell.row.rawValue)"
+    }
+
+    /// Bakes any EXIF orientation into the bitmap so downstream stages work
+    /// in a single coordinate space. The slip is already portrait in the
+    /// captured image (the camera applies orientation via EXIF); we just
+    /// need to collapse that into the raw pixels before per-cell cropping,
+    /// which operates on `UIImage.cgImage` directly.
+    private func orientSlipToPortrait(_ image: UIImage) -> UIImage {
+        if image.imageOrientation == .up { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
     }
 }

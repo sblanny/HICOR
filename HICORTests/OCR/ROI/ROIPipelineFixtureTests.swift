@@ -30,16 +30,20 @@ final class ROIPipelineFixtureTests: XCTestCase {
 
     private let bundle = Bundle(for: ROIPipelineFixtureTests.self)
 
+    /// Fixtures live in `HICORTests/OCR/Fixtures/Images/grk6000/<subdir>/`
+    /// on disk but are added to the bundle via a flat resource folder, so
+    /// we discover captures by filename prefix (`<subdir>-case-*.jpg`).
     private func fixtureURLs(in subdir: String) throws -> [URL] {
-        let resourceURL = bundle.url(forResource: "Images/grk6000/\(subdir)", withExtension: nil)
-        guard let resourceURL else {
-            throw XCTSkip("fixture subdir not bundled yet: \(subdir)")
+        let prefix = "\(subdir)-case-"
+        let allJPGs = bundle.paths(forResourcesOfType: "jpg", inDirectory: nil)
+        let matches = allJPGs
+            .map(URL.init(fileURLWithPath:))
+            .filter { $0.lastPathComponent.hasPrefix(prefix) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        if matches.isEmpty {
+            throw XCTSkip("no bundled captures for \(subdir) — filenames must start with '\(prefix)'")
         }
-        let contents = try FileManager.default.contentsOfDirectory(
-            at: resourceURL,
-            includingPropertiesForKeys: nil
-        )
-        return contents.filter { $0.pathExtension.lowercased() == "jpg" }.sorted { $0.path < $1.path }
+        return matches
     }
 
     private func runPipeline(on jpegURL: URL) async throws -> ExtractedText {
@@ -99,9 +103,9 @@ final class ROIPipelineFixtureTests: XCTestCase {
                     XCTFail("\(url.lastPathComponent): JSON missing expected block"); continue
                 }
                 assertMatches(text: text, expected: block)
-            } catch OCRService.OCRError.incompleteCells {
+            } catch OCRService.OCRError.incompleteCells(let missing) {
                 if !shouldFail {
-                    XCTFail("\(url.lastPathComponent): unexpected incompleteCells")
+                    XCTFail("\(url.lastPathComponent): unexpected incompleteCells. Missing: \(missing.joined(separator: ", "))")
                 }
             } catch {
                 XCTFail("\(url.lastPathComponent): unexpected error \(error)")

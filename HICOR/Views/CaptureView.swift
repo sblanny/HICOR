@@ -3,7 +3,8 @@ import AVFoundation
 import UIKit
 
 /// Full-screen camera capture view with torch toggle and a dashed framing
-/// overlay matching the GRK-6000 printout's ~4:3 landscape aspect ratio.
+/// overlay matching the GRK-6000 printout's ~3:4 portrait aspect ratio
+/// (thermal slip held portrait so both R and L sections fit vertically).
 /// Calls `onImagePicked` with the captured UIImage, or `onCancel` when the
 /// user backs out.
 struct CaptureView: View {
@@ -17,16 +18,21 @@ struct CaptureView: View {
         ZStack {
             CapturePreview(model: model).ignoresSafeArea()
 
-            // Framing guide — 4:3 landscape, 80% width.
+            // Framing guide — 3:4 portrait, fits the vertical slip.
             GeometryReader { geo in
-                let guideWidth = geo.size.width * 0.9
-                let guideHeight = guideWidth * 3.0 / 4.0
+                let maxHeight = geo.size.height * 0.8
+                let maxWidth = geo.size.width * 0.8
+                let byHeight = (width: maxHeight * 3.0 / 4.0, height: maxHeight)
+                let guide: (width: CGFloat, height: CGFloat) =
+                    byHeight.width <= maxWidth
+                        ? byHeight
+                        : (width: maxWidth, height: maxWidth * 4.0 / 3.0)
                 Path { path in
                     let rect = CGRect(
-                        x: (geo.size.width - guideWidth) / 2.0,
-                        y: (geo.size.height - guideHeight) / 2.0,
-                        width: guideWidth,
-                        height: guideHeight
+                        x: (geo.size.width - guide.width) / 2.0,
+                        y: (geo.size.height - guide.height) / 2.0,
+                        width: guide.width,
+                        height: guide.height
                     )
                     path.addRect(rect)
                 }

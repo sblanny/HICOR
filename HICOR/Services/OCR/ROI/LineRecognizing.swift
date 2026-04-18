@@ -38,8 +38,15 @@ final class MLKitLineRecognizer: LineRecognizing {
                 cont.resume(returning: text)
             }
         }
+        // Emit element-level granularity so AnchorDetector can see tokens
+        // like "<R>", "SPH", "CYL", "AX" that ML Kit otherwise fuses into a
+        // single header line. CellOCR still works against elements because
+        // cell crops typically contain a single token (e.g. "-0.50") that
+        // matches the full decimal regex on its own.
         return text.blocks.flatMap { block in
-            block.lines.map { OCRLine(text: $0.text, frame: $0.frame) }
+            block.lines.flatMap { line in
+                line.elements.map { OCRLine(text: $0.text, frame: $0.frame) }
+            }
         }
     }
 }

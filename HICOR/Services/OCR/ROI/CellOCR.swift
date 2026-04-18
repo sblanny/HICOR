@@ -48,9 +48,11 @@ class CellOCR {
     }
 
     private static let decimalRegex: NSRegularExpression = {
-        // Matches an optional sign followed by 1-2 digits, a dot, and exactly
-        // two decimal digits. Covers both "-1.25" (SPH) and "0.50" (CYL,
-        // where ReadingNormalizer reinserts the minus sign if needed).
-        try! NSRegularExpression(pattern: #"^[-+]?\d{1,2}\.\d{2}$"#)
+        // Accept "-1.25" / "0.50" (with dot) OR dotless "-125" / "050" / "125".
+        // ML Kit routinely drops the decimal point on dim thermal prints; the
+        // downstream ReadingNormalizer reinserts it. 2-4 digit dotless forms
+        // cover values from 0.00 (-000-) to 9.75 (975) and occasional "1225"
+        // for 12.25 on high-sphere patients.
+        try! NSRegularExpression(pattern: #"^[-+]?(?:\d{1,2}\.\d{2}|\d{2,4})$"#)
     }()
 }
