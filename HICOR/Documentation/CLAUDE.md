@@ -222,3 +222,14 @@ xcodebuild -workspace HICOR.xcworkspace -scheme HICOR \
 ```
 
 For real-device test runs use `-destination 'id=<device-UDID>' -allowProvisioningUpdates`. The iOS 26 Apple Silicon simulator cannot currently launch HICOR because ML Kit lacks an arm64 simulator slice — use an Intel-archive simulator image, Rosetta, or a physical device.
+
+## ROI pipeline rollback
+
+The default OCR extractor is `ROIPipelineExtractor(fallback: MLKitTextExtractor())`.
+If ROI-based extraction needs to be disabled:
+
+- One-line revert: change `HICOR/Services/OCR/OCRService.swift` init default back to `MLKitTextExtractor()`.
+- `ROIPipelineExtractor` and all supporting files (`HICOR/Services/OCR/ROI/`, `HICOR/Services/OCR/Preprocessing/`) can stay in the repo dormant.
+- `CaptureView` can be reverted to the old `CameraPickerView` independently — git history holds the original `CameraPickerView.swift` (see the "refactor: replace CameraPickerView with CaptureView" commit), or re-create the stock `UIImagePickerController` wrapper.
+
+The ROI pipeline is designed to be a pure swap behind the `TextExtracting` protocol: rolling back touches one line of production code.
