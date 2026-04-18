@@ -24,7 +24,14 @@ enum ReadingNormalizer {
     }
 
     static func normalizeOCRString(_ raw: String) -> String {
-        let tokens = raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let rawTokens = raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        // Merged-token repair. ML Kit occasionally fuses adjacent column
+        // values when row spacing is tight on thermal prints — e.g. SPH and
+        // CYL collapse to "3.00-3.75", or a trailing column emits "3.25-"
+        // with a dangling dash from the next row's sign. Split these before
+        // per-token normalization so the downstream shape gate sees well-
+        // formed decimals.
+        let tokens = rawTokens.flatMap { splitMergedNumerics($0) }
         let normalized = tokens.map { token -> String in
             isNumericCandidate(token) ? normalizeNumericToken(token) : token
         }
@@ -37,6 +44,38 @@ enum ReadingNormalizer {
         let merged = mergeAxisFragments(normalized)
         return merged.joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Split merged numeric tokens ML Kit emits when adjacent columns
+    /// collapse. Two shapes observed on the GRK-6000 desktop printout:
+    ///   "3.00-3.75" — SPH and CYL fused with the minus sign between them;
+    ///                 split into ["3.00", "-3.75"] so CYL keeps its sign.
+    ///   "3.25-"     — trailing dash from the next row's sign-column leaks
+    ///                 onto this row's SPH token; drop the dash.
+    /// All other tokens pass through unchanged.
+    static func splitMergedNumerics(_ token: String) -> [String] {
+        let joined = #"^(\d{1,2}\.\d{2})-(\d{1,2}\.\d{2})$"#
+        if let regex = try? NSRegularExpression(pattern: joined),
+           let match = regex.firstMatch(
+               in: token,
+               range: NSRange(token.startIndex..., in: token)
+           ),
+           match.numberOfRanges == 3,
+           let r1 = Range(match.range(at: 1), in: token),
+           let r2 = Range(match.range(at: 2), in: token) {
+            return [String(token[r1]), "-" + String(token[r2])]
+        }
+        let trailing = #"^(\d{1,2}\.\d{2})-$"#
+        if let regex = try? NSRegularExpression(pattern: trailing),
+           let match = regex.firstMatch(
+               in: token,
+               range: NSRange(token.startIndex..., in: token)
+           ),
+           match.numberOfRanges == 2,
+           let r1 = Range(match.range(at: 1), in: token) {
+            return [String(token[r1])]
+        }
+        return [token]
     }
 
     static func mergeAxisFragments(_ tokens: [String]) -> [String] {

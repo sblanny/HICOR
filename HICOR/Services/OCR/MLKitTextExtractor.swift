@@ -207,21 +207,26 @@ final class MLKitTextExtractor: TextExtracting {
         let headers = entries.filter { headerTexts.contains($0.text.uppercased()) }
         guard headers.count >= 2 else { return 0 }
 
-        // Cluster headers by primary coordinate so multiple header rows
-        // (should not happen on GRK-6000, but defensive) don't blend into a
-        // single regression. 500 px threshold is roughly 8 line-heights on a
-        // 4032 px axis — comfortable separation.
+        // Cluster headers using the same 60 px intra-row tolerance the row
+        // grouper uses. A looser threshold can sweep in stray "CYL (-)"-style
+        // document-wide notes that share a header label but live on their own
+        // row, which biases the regression and inverts the slope. Then prefer
+        // a cluster with all three headers (SPH + CYL + AX) before falling
+        // back to any two-header cluster — three collinear points give a
+        // dramatically more stable fit.
+        let headerTolerance: CGFloat = 60
         let sorted = headers.sorted { $0.primary < $1.primary }
         var clusters: [[Entry]] = [[sorted[0]]]
         for entry in sorted.dropFirst() {
             let lastEntry = clusters[clusters.count - 1].last!
-            if entry.primary - lastEntry.primary < 500 {
+            if entry.primary - lastEntry.primary < headerTolerance {
                 clusters[clusters.count - 1].append(entry)
             } else {
                 clusters.append([entry])
             }
         }
-        for cluster in clusters where cluster.count >= 2 {
+        let ordered = clusters.sorted { $0.count > $1.count }
+        for cluster in ordered where cluster.count >= 2 {
             let xs = cluster.map(\.secondary)
             let ys = cluster.map(\.primary)
             let n = CGFloat(xs.count)
