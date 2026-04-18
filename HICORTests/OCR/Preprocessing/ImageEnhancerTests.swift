@@ -19,21 +19,24 @@ final class ImageEnhancerTests: XCTestCase {
         let w = cg.width
         let h = cg.height
         let bytesPerRow = w * 4
-        var buffer = [UInt8](repeating: 0, count: h * bytesPerRow)
+        var pixels = Data(count: h * bytesPerRow)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmap = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        let ctx = CGContext(
-            data: &buffer,
-            width: w,
-            height: h,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: colorSpace,
-            bitmapInfo: bitmap.rawValue
-        )!
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue
+        pixels.withUnsafeMutableBytes { (rawPtr: UnsafeMutableRawBufferPointer) in
+            guard let base = rawPtr.baseAddress else { return }
+            guard let ctx = CGContext(
+                data: base,
+                width: w,
+                height: h,
+                bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow,
+                space: colorSpace,
+                bitmapInfo: bitmapInfo
+            ) else { return }
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
         let centerIndex = (h / 2) * bytesPerRow + (w / 2) * 4
-        return buffer[centerIndex]
+        return pixels[centerIndex]
     }
 
     func testStandardEnhancementLiftsDarkPixelsAndPushesLightsHigher() {
@@ -57,6 +60,13 @@ final class ImageEnhancerTests: XCTestCase {
 
         XCTAssertGreaterThan(aggressive, standard,
                              "aggressive should lift dark pixels more than standard")
+    }
+
+    func testHelperReadsFlatGrayInputCorrectly() {
+        let mid = flatGrayImage(value: 128)
+        let read = centerPixelLuminance(mid)
+        XCTAssertEqual(read, 128, accuracy: 2,
+                       "centerPixelLuminance should read ~128 from a flat-gray(128) image; got \(read)")
     }
 
     func testEnhancementPreservesImageSize() {

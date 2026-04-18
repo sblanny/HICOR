@@ -35,22 +35,22 @@ enum ImageEnhancer {
             unsharpIntensity = 0.8
         }
 
+        let gamma = CIFilter.gammaAdjust()
+        gamma.inputImage = ciInput
+        gamma.power = Float(gammaPower)
+
+        guard let afterGamma = gamma.outputImage else { return image }
+
         let colorControls = CIFilter.colorControls()
-        colorControls.inputImage = ciInput
+        colorControls.inputImage = afterGamma
         colorControls.contrast = Float(contrast)
         colorControls.brightness = Float(brightness)
         colorControls.saturation = 1.0
 
         guard let afterColor = colorControls.outputImage else { return image }
 
-        let gamma = CIFilter.gammaAdjust()
-        gamma.inputImage = afterColor
-        gamma.power = Float(gammaPower)
-
-        guard let afterGamma = gamma.outputImage else { return image }
-
         let sharpen = CIFilter.unsharpMask()
-        sharpen.inputImage = afterGamma
+        sharpen.inputImage = afterColor
         sharpen.radius = Float(unsharpRadius)
         sharpen.intensity = Float(unsharpIntensity)
 
