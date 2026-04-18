@@ -231,6 +231,9 @@ struct AnalysisPlaceholderView: View {
                 return "The printout format was not recognized. Confirm the photo shows the autorefractor slip."
             case .insufficientReadings:
                 return "Not enough valid readings were extracted. Retake the photo."
+            case .incompleteCells(let missing):
+                let detail = missing.prefix(3).joined(separator: ", ")
+                return "Some readings could not be extracted (\(detail)). Retake the photo."
             }
         }
         return error.localizedDescription

@@ -23,4 +23,16 @@ struct CellROI: Equatable, Hashable {
     let column: Column
     let row: Row
     let rect: CGRect
+
+    // Equality and hashing key only on (eye, column, row) so the orchestrator
+    // can look up a cell by identity with a placeholder rect.
+    static func == (lhs: CellROI, rhs: CellROI) -> Bool {
+        lhs.eye == rhs.eye && lhs.column == rhs.column && lhs.row == rhs.row
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(eye)
+        hasher.combine(column)
+        hasher.combine(row)
+    }
 }

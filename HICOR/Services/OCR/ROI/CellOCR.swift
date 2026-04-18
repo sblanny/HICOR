@@ -1,6 +1,6 @@
 import UIKit
 
-final class CellOCR {
+class CellOCR {
 
     private let recognizer: LineRecognizing
     private let enhance: (UIImage, ImageEnhancer.Strength) -> UIImage

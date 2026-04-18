@@ -119,6 +119,7 @@ final class OCRService {
         case noTextFound
         case unrecognizedFormat
         case insufficientReadings
+        case incompleteCells(missing: [String])
     }
 
     private let extractor: TextExtracting

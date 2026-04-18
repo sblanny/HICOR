@@ -1,6 +1,6 @@
 import UIKit
 
-final class AnchorDetector {
+class AnchorDetector {
 
     enum Error: Swift.Error, Equatable {
         case insufficientAnchors(missing: [String])
