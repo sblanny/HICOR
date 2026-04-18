@@ -232,8 +232,9 @@ struct AnalysisPlaceholderView: View {
             case .insufficientReadings:
                 return "Not enough valid readings were extracted. Retake the photo."
             case .incompleteCells(let missing):
-                let detail = missing.prefix(3).joined(separator: ", ")
-                return "Some readings could not be extracted (\(detail)). Retake the photo."
+                let labels = missing.prefix(3).joined(separator: ", ")
+                let suffix = missing.count > 3 ? ", plus \(missing.count - 3) more" : ""
+                return "Couldn't read all readings (\(labels)\(suffix)). Retake the photo with the printout well-lit and centered in the frame."
             }
         }
         return error.localizedDescription
