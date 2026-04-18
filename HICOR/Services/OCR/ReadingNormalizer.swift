@@ -28,8 +28,35 @@ enum ReadingNormalizer {
         let normalized = tokens.map { token -> String in
             isNumericCandidate(token) ? normalizeNumericToken(token) : token
         }
-        return normalized.joined(separator: " ")
+        // Axis-fragment repair. ML Kit occasionally splits a 3-digit axis like
+        // 179 into two adjacent tokens "1" and "79" on faint thermal prints,
+        // which the shape gate rejects. Merge a standalone "1" token followed
+        // by a 2-digit integer whose combined value falls in the legal axis
+        // range (100–180). Restricted to leading digit "1" because no valid
+        // 3-digit axis starts with any other digit.
+        let merged = mergeAxisFragments(normalized)
+        return merged.joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func mergeAxisFragments(_ tokens: [String]) -> [String] {
+        var result: [String] = []
+        var i = 0
+        while i < tokens.count {
+            let t = tokens[i]
+            if t == "1",
+               i + 1 < tokens.count,
+               tokens[i + 1].count == 2,
+               tokens[i + 1].allSatisfy(\.isNumber),
+               let nn = Int(tokens[i + 1]), nn >= 0, nn <= 80 {
+                result.append("1" + tokens[i + 1])
+                i += 2
+            } else {
+                result.append(t)
+                i += 1
+            }
+        }
+        return result
     }
 
     static func isNumericCandidate(_ token: String) -> Bool {
@@ -40,7 +67,10 @@ enum ReadingNormalizer {
         if reserved.contains(token.uppercased()) { return false }
 
         let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S", "A"]
-        let structural: Set<Character> = ["+", "-", ".", "*"]
+        // Comma is treated as structural so tokens like "0,75" survive the
+        // numeric-candidate gate; normalizeNumericToken then substitutes it
+        // back to "." Autorefractor printouts never contain legitimate commas.
+        let structural: Set<Character> = ["+", "-", ".", "*", ","]
         var hasDigit = false
         for ch in token {
             if ch.isNumber { hasDigit = true; continue }
@@ -62,6 +92,9 @@ enum ReadingNormalizer {
         // desktop printouts (thin-stroke glyph confusion). Only applied
         // inside tokens flagged numeric by isNumericCandidate.
         s = s.replacingOccurrences(of: "A", with: "4")
+        // Comma → period. ML Kit occasionally emits "0,75" instead of "0.75"
+        // on thermal captures (European-locale glyph confusion).
+        s = s.replacingOccurrences(of: ",", with: ".")
 
         // Dropped-decimal repair. ML Kit occasionally loses the decimal point
         // on thermal-paper decimals like "4.25" → "425", leaving a bare 3-
