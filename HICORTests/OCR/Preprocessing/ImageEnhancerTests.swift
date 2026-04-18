@@ -16,19 +16,24 @@ final class ImageEnhancerTests: XCTestCase {
 
     private func centerPixelLuminance(_ image: UIImage) -> UInt8 {
         let cg = image.cgImage!
-        let width = cg.width, height = cg.height
-        var pixel: [UInt8] = [0, 0, 0, 0]
+        let w = cg.width
+        let h = cg.height
+        let bytesPerRow = w * 4
+        var buffer = [UInt8](repeating: 0, count: h * bytesPerRow)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmap = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        let ctx = CGContext(data: &pixel,
-                            width: 1, height: 1,
-                            bitsPerComponent: 8, bytesPerRow: 4,
-                            space: colorSpace, bitmapInfo: bitmap.rawValue)!
-        ctx.draw(cg, in: CGRect(x: -CGFloat(width / 2),
-                                y: -CGFloat(height / 2),
-                                width: CGFloat(width),
-                                height: CGFloat(height)))
-        return pixel[0]
+        let ctx = CGContext(
+            data: &buffer,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: bitmap.rawValue
+        )!
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let centerIndex = (h / 2) * bytesPerRow + (w / 2) * 4
+        return buffer[centerIndex]
     }
 
     func testStandardEnhancementLiftsDarkPixelsAndPushesLightsHigher() {
@@ -59,4 +64,5 @@ final class ImageEnhancerTests: XCTestCase {
         let output = ImageEnhancer.enhance(input, strength: .standard)
         XCTAssertEqual(output.size, CGSize(width: 60, height: 40))
     }
+
 }
