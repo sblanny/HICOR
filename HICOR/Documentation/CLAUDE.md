@@ -49,7 +49,7 @@ HICOR/
 | `Views/SessionSetupView.swift` | Launch screen: date + location, pre-filled from `SessionSettings.load()` |
 | `Views/PatientEntryView.swift` | Numeric patient number entry with auto-focus |
 | `Views/PhotoCaptureView.swift` | 2–5 photo capture, thumbnail row, PD banner, DEBUG simulate-no-PD toggle |
-| `Views/CameraPickerView.swift` | `UIImagePickerController` wrapper; falls back to `.photoLibrary` on simulator |
+| `Views/CaptureView.swift` | AVFoundation full-screen capture with torch toggle and a 4:3 framing guide. Replaces the old `CameraPickerView` to give the ROI pipeline well-framed, user-torch-lit captures. |
 | `Views/FullScreenPhotoView.swift` | Pinch + double-tap zoom viewer for thumbnails |
 | `Views/AnalysisPlaceholderView.swift` | Spinner screen; runs OCR pipeline + ConsistencyValidator; presents hard-block/overridable/error alerts; on success builds in-memory `PatientRefraction` and navigates to `PrescriptionAnalysisView`. Does NOT save — persistence happens on Save & Return |
 | `Views/PrescriptionAnalysisView.swift` | Read-only review of parsed readings per photo (per-eye SPH/CYL/AX, machine AVG/`*` line + confidence, low-confidence styling, PD). Save & Return calls `sync.save(refraction)` then posts `.hicorReturnToRoot` |

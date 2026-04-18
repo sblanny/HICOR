@@ -34,12 +34,16 @@ struct PhotoCaptureView: View {
         .padding()
         .navigationTitle("Patient #\(patientNumber)")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingCamera) {
-            CameraPickerView { image in
-                if let data = image.jpegData(compressionQuality: 0.8) {
-                    state.addPhoto(data)
-                }
-            }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CaptureView(
+                onImagePicked: { image in
+                    if let data = image.jpegData(compressionQuality: 0.8) {
+                        state.addPhoto(data)
+                    }
+                    showingCamera = false
+                },
+                onCancel: { showingCamera = false }
+            )
             .ignoresSafeArea()
         }
         .fullScreenCover(item: Binding(
