@@ -10,6 +10,9 @@ struct PhotoCaptureView: View {
     @State private var fullScreenIndex: Int?
     @State private var showCommitBlockedAlert = false
     @State private var navigateToAnalysis = false
+    #if DEBUG
+    @State private var showingFixtureCapture = false
+    #endif
 
     var body: some View {
         VStack(spacing: 20) {
@@ -72,12 +75,20 @@ struct PhotoCaptureView: View {
         }
         #if DEBUG
         .safeAreaInset(edge: .bottom) {
-            Toggle("DEBUG: Simulate PD not found", isOn: Binding(
-                get: { state.pdManualEntryRequired },
-                set: { state.pdManualEntryRequired = $0 }
-            ))
+            VStack(spacing: 4) {
+                Toggle("DEBUG: Simulate PD not found", isOn: Binding(
+                    get: { state.pdManualEntryRequired },
+                    set: { state.pdManualEntryRequired = $0 }
+                ))
+                Button("DEBUG: Capture fixture") {
+                    showingFixtureCapture = true
+                }
+            }
             .font(.caption)
             .padding(.horizontal)
+        }
+        .sheet(isPresented: $showingFixtureCapture) {
+            FixtureCaptureView()
         }
         #endif
     }
