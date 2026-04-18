@@ -124,7 +124,7 @@ final class OCRService {
 
     private let extractor: TextExtracting
 
-    init(extractor: TextExtracting = MLKitTextExtractor()) {
+    init(extractor: TextExtracting = ROIPipelineExtractor(fallback: MLKitTextExtractor())) {
         self.extractor = extractor
     }
 
