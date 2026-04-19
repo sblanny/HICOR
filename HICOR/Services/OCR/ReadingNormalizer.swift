@@ -24,12 +24,93 @@ enum ReadingNormalizer {
     }
 
     static func normalizeOCRString(_ raw: String) -> String {
-        let tokens = raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let rawTokens = raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        // Merged-token repair. ML Kit occasionally fuses adjacent column
+        // values when row spacing is tight on thermal prints — e.g. SPH and
+        // CYL collapse to "3.00-3.75", or a trailing column emits "3.25-"
+        // with a dangling dash from the next row's sign. Split these before
+        // per-token normalization so the downstream shape gate sees well-
+        // formed decimals.
+        let tokens = rawTokens.flatMap { splitMergedNumerics($0) }
         let normalized = tokens.map { token -> String in
             isNumericCandidate(token) ? normalizeNumericToken(token) : token
         }
-        return normalized.joined(separator: " ")
+        // Axis-fragment repair. ML Kit occasionally splits a 3-digit axis like
+        // 179 into two adjacent tokens "1" and "79" on faint thermal prints,
+        // which the shape gate rejects. Merge a standalone "1" token followed
+        // by a 2-digit integer whose combined value falls in the legal axis
+        // range (100–180). Restricted to leading digit "1" because no valid
+        // 3-digit axis starts with any other digit.
+        let merged = mergeAxisFragments(normalized)
+        return merged.joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Split merged numeric tokens ML Kit emits when adjacent columns
+    /// collapse. Three shapes observed on the GRK-6000 desktop printout:
+    ///   "3.00-3.75" — SPH and CYL fused with the minus sign between them;
+    ///                 split into ["3.00", "-3.75"] so CYL keeps its sign.
+    ///   "3.25-"     — trailing dash from the next row's sign-column leaks
+    ///                 onto this row's SPH token; drop the dash.
+    ///   "3.7517"    — decimal and axis column collapse (no separator at
+    ///                 all); split into ["3.75", "17"] when the trailing
+    ///                 digits fall in the legal axis range (1-180).
+    /// All other tokens pass through unchanged.
+    static func splitMergedNumerics(_ token: String) -> [String] {
+        let joined = #"^(\d{1,2}\.\d{2})-(\d{1,2}\.\d{2})$"#
+        if let regex = try? NSRegularExpression(pattern: joined),
+           let match = regex.firstMatch(
+               in: token,
+               range: NSRange(token.startIndex..., in: token)
+           ),
+           match.numberOfRanges == 3,
+           let r1 = Range(match.range(at: 1), in: token),
+           let r2 = Range(match.range(at: 2), in: token) {
+            return [String(token[r1]), "-" + String(token[r2])]
+        }
+        let trailing = #"^(\d{1,2}\.\d{2})-$"#
+        if let regex = try? NSRegularExpression(pattern: trailing),
+           let match = regex.firstMatch(
+               in: token,
+               range: NSRange(token.startIndex..., in: token)
+           ),
+           match.numberOfRanges == 2,
+           let r1 = Range(match.range(at: 1), in: token) {
+            return [String(token[r1])]
+        }
+        let decimalAxis = #"^(\d{1,2}\.\d{2})(\d{1,3})$"#
+        if let regex = try? NSRegularExpression(pattern: decimalAxis),
+           let match = regex.firstMatch(
+               in: token,
+               range: NSRange(token.startIndex..., in: token)
+           ),
+           match.numberOfRanges == 3,
+           let r1 = Range(match.range(at: 1), in: token),
+           let r2 = Range(match.range(at: 2), in: token),
+           let ax = Int(String(token[r2])), ax >= 1, ax <= 180 {
+            return [String(token[r1]), String(token[r2])]
+        }
+        return [token]
+    }
+
+    static func mergeAxisFragments(_ tokens: [String]) -> [String] {
+        var result: [String] = []
+        var i = 0
+        while i < tokens.count {
+            let t = tokens[i]
+            if t == "1",
+               i + 1 < tokens.count,
+               tokens[i + 1].count == 2,
+               tokens[i + 1].allSatisfy(\.isNumber),
+               let nn = Int(tokens[i + 1]), nn >= 0, nn <= 80 {
+                result.append("1" + tokens[i + 1])
+                i += 2
+            } else {
+                result.append(t)
+                i += 1
+            }
+        }
+        return result
     }
 
     static func isNumericCandidate(_ token: String) -> Bool {
@@ -39,8 +120,11 @@ enum ReadingNormalizer {
         ]
         if reserved.contains(token.uppercased()) { return false }
 
-        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S"]
-        let structural: Set<Character> = ["+", "-", ".", "*"]
+        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S", "A", "C"]
+        // Comma is treated as structural so tokens like "0,75" survive the
+        // numeric-candidate gate; normalizeNumericToken then substitutes it
+        // back to "." Autorefractor printouts never contain legitimate commas.
+        let structural: Set<Character> = ["+", "-", ".", "*", ","]
         var hasDigit = false
         for ch in token {
             if ch.isNumber { hasDigit = true; continue }
@@ -58,6 +142,43 @@ enum ReadingNormalizer {
         s = s.replacingOccurrences(of: "l", with: "1")
         s = s.replacingOccurrences(of: "I", with: "1")
         s = s.replacingOccurrences(of: "S", with: "5")
+        // ML Kit occasionally substitutes capital A for digit 4 on thermal
+        // desktop printouts (thin-stroke glyph confusion). Only applied
+        // inside tokens flagged numeric by isNumericCandidate.
+        s = s.replacingOccurrences(of: "A", with: "4")
+        // Capital C → 0 substitution. Observed on dim thermal SPH cells
+        // where "0.50" is read as "C50" (leading zero loses its curve bar
+        // and becomes indistinguishable from a C). Only applied after the
+        // numeric-candidate gate has filtered non-numeric tokens.
+        s = s.replacingOccurrences(of: "C", with: "0")
+        // Comma → period. ML Kit occasionally emits "0,75" instead of "0.75"
+        // on thermal captures (European-locale glyph confusion).
+        s = s.replacingOccurrences(of: ",", with: ".")
+
+        // Leading-zero repair. ML Kit occasionally drops the leading "0"
+        // from sub-unit decimals on tight thermal cells, so "-0.25" comes
+        // back as ".25" and "-.25" as "-.25". The shape gate wants at least
+        // one digit before the decimal, so we reinsert the zero — preserving
+        // any sign prefix so the parser's sign-combination logic still works.
+        if s.hasPrefix("-.") || s.hasPrefix("+.") {
+            s = String(s.first!) + "0" + s.dropFirst()
+        } else if s.hasPrefix(".") {
+            s = "0" + s
+        }
+
+        // Dropped-decimal repair. ML Kit occasionally loses the decimal point
+        // on thermal-paper decimals like "4.25" → "425", leaving a bare 3-
+        // digit integer the shape gate then rejects. A 3-digit token whose
+        // integer value exceeds 180 cannot be a legitimate axis (AX range is
+        // 1-180), so it must be a diopter with a missing dot. We restore the
+        // dot after the first digit. Values ≤ 180 are left alone because
+        // they could be real axes (e.g. 108, 150, 175).
+        if s.count == 3,
+           s.allSatisfy(\.isNumber),
+           let intValue = Int(s), intValue > 180 {
+            let i = s.index(after: s.startIndex)
+            s = s[..<i] + "." + s[i...]
+        }
         return s
     }
 

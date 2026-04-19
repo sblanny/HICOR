@@ -67,7 +67,7 @@ struct AnalysisPlaceholderView: View {
                 return Alert(
                     title: Text("Cannot continue"),
                     message: Text(message),
-                    dismissButton: .default(Text("Back to Photos")) { dismiss() }
+                    dismissButton: .default(Text("Back to Photo")) { dismiss() }
                 )
             case .overridable(let message):
                 return Alert(
@@ -84,23 +84,23 @@ struct AnalysisPlaceholderView: View {
                             dismiss()
                         }
                     },
-                    secondaryButton: .cancel(Text("Back to Photos")) { dismiss() }
+                    secondaryButton: .cancel(Text("Back to Photo")) { dismiss() }
                 )
             case .error(let message, let snapshot):
                 if snapshot != nil {
                     return Alert(
-                        title: Text("Could not read printouts"),
+                        title: Text("Could not read printout"),
                         message: Text(message),
                         primaryButton: .default(Text("Show Debug Info")) {
                             showDebugSheet = true
                         },
-                        secondaryButton: .cancel(Text("Back to Photos")) { dismiss() }
+                        secondaryButton: .cancel(Text("Back to Photo")) { dismiss() }
                     )
                 } else {
                     return Alert(
-                        title: Text("Could not read printouts"),
+                        title: Text("Could not read printout"),
                         message: Text(message),
-                        dismissButton: .default(Text("Back to Photos")) { dismiss() }
+                        dismissButton: .default(Text("Back to Photo")) { dismiss() }
                     )
                 }
             }
@@ -125,10 +125,10 @@ struct AnalysisPlaceholderView: View {
                 VStack(spacing: 12) {
                     Text("Navigation error")
                         .font(.headline)
-                    Text("The prescription analysis data was lost. Please retake photos.")
+                    Text("The prescription analysis data was lost. Please retake the photo.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Back to Photos") { dismiss() }
+                    Button("Back to Photo") { dismiss() }
                 }
                 .padding()
             }
@@ -141,7 +141,7 @@ struct AnalysisPlaceholderView: View {
         let images = photos.compactMap { UIImage(data: $0) }
         guard !images.isEmpty else {
             print("=== OCR nav: no decodable images — presenting error alert ===")
-            presentError("No usable photos were captured.", snapshot: nil)
+            presentError("No usable photo was captured.", snapshot: nil)
             return
         }
 
@@ -180,7 +180,7 @@ struct AnalysisPlaceholderView: View {
         )
 
         let validator = ConsistencyValidator()
-        let outcome = validator.validate(results, photoCount: photos.count)
+        let outcome = validator.validate(results)
         navigation = NavigationPayload(refraction: refraction, results: results)
         print("=== OCR nav: consistency result = \(outcome.result), message = \(outcome.message ?? "nil") ===")
 
@@ -196,7 +196,7 @@ struct AnalysisPlaceholderView: View {
         case .hardBlock:
             print("=== OCR nav: hardBlock — presenting block alert ===")
             phase = .awaitingDecision
-            alertState = .hardBlock(message: outcome.message ?? "Readings cannot be reconciled. Capture additional printouts.")
+            alertState = .hardBlock(message: outcome.message ?? "Readings cannot be reconciled. Retake the photo.")
         }
     }
 
@@ -226,11 +226,15 @@ struct AnalysisPlaceholderView: View {
         if let ocrError = error as? OCRService.OCRError {
             switch ocrError {
             case .noTextFound:
-                return "No text was detected in the photos. Retake them with better lighting."
+                return "No text was detected in the photo. Retake it with better lighting."
             case .unrecognizedFormat:
                 return "The printout format was not recognized. Confirm the photo shows the autorefractor slip."
             case .insufficientReadings:
-                return "Not enough valid readings were extracted. Retake the photos."
+                return "Not enough valid readings were extracted. Retake the photo."
+            case .incompleteCells(let missing):
+                let labels = missing.prefix(3).joined(separator: ", ")
+                let suffix = missing.count > 3 ? ", plus \(missing.count - 3) more" : ""
+                return "Couldn't read all readings (\(labels)\(suffix)). Retake the photo with the printout well-lit and centered in the frame."
             }
         }
         return error.localizedDescription

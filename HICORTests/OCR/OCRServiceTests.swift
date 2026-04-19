@@ -65,68 +65,28 @@ final class OCRServiceTests: XCTestCase {
         XCTAssertEqual(batch.successfulResults[0].rightEye?.readings.count, 3)
     }
 
-    func testPipelineScoresAcrossVariantsAndPicksBest() async {
-        final class MultiVariantStub: TextExtracting {
-            var calls: [(PreprocessingVariant, Int)] = []
+    func testPipelineCallsExtractorOnceAndPicksHigherScoringReconstruction() async {
+        final class CallCountingStub: TextExtracting {
+            var callCount = 0
             func extractText(from image: UIImage) async throws -> ExtractedText {
-                try await extractText(from: image, variant: .standard, revision: VisionTextExtractor.latestRevision())
-            }
-            func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText {
-                calls.append((variant, revision))
-                switch variant {
-                case .standard:
-                    return ExtractedText(
-                        rowBased: ["garbage"], columnBased: [],
-                        preprocessedImageData: nil, boxes: [],
-                        revisionUsed: revision, variant: variant
-                    )
-                case .thermalBinary:
-                    return ExtractedText(
-                        rowBased: OCRFixture.load("desktop_standard"), columnBased: [],
-                        preprocessedImageData: nil, boxes: [],
-                        revisionUsed: revision, variant: variant
-                    )
-                case .raw:
-                    return ExtractedText(
-                        rowBased: ["garbage"], columnBased: [],
-                        preprocessedImageData: nil, boxes: [],
-                        revisionUsed: revision, variant: variant
-                    )
-                }
-            }
-        }
-        let stub = MultiVariantStub()
-        let service = OCRService(extractor: stub)
-        let batch = await service.processImages([UIImage()])
-        XCTAssertEqual(batch.perImage[0].winningScore?.variant, .thermalBinary)
-        // thermalBinary's desktop_standard score (~0.65) sits below the 0.85
-        // short-circuit threshold, so the pipeline sweeps every variant×revision.
-        let expectedCalls = PreprocessingVariant.allCases.count * VisionTextExtractor.revisionsToTry().count
-        XCTAssertEqual(stub.calls.count, expectedCalls,
-                       "Expected full variant×revision sweep when no variant exceeds short-circuit threshold")
-        XCTAssertEqual(stub.calls.first?.0, .standard)
-    }
-
-    func testPipelineVisitsAllVariantsWhenNoneShortCircuit() async {
-        final class AllLowScoreStub: TextExtracting {
-            var calls: [(PreprocessingVariant, Int)] = []
-            func extractText(from image: UIImage) async throws -> ExtractedText { .empty }
-            func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText {
-                calls.append((variant, revision))
-                // one-eye-only handheld → parseable but score below 0.85 ceiling
+                callCount += 1
+                // row reconstruction parses to a clean desktop printout (high score),
+                // column reconstruction is garbage (low score).
                 return ExtractedText(
-                    rowBased: ["-REF-", "[R]", "+ 1.00 - 0.25 90"],
-                    columnBased: [],
-                    preprocessedImageData: nil, boxes: [],
-                    revisionUsed: revision, variant: variant
+                    rowBased: OCRFixture.load("desktop_standard"),
+                    columnBased: ["random", "garbage"]
                 )
             }
         }
-        let stub = AllLowScoreStub()
+        let stub = CallCountingStub()
         let service = OCRService(extractor: stub)
-        _ = await service.processImages([UIImage()])
-        let expectedCalls = PreprocessingVariant.allCases.count * VisionTextExtractor.revisionsToTry().count
-        XCTAssertEqual(stub.calls.count, expectedCalls,
-                       "Expected full variant×revision sweep when no variant exceeds short-circuit threshold")
+
+        let batch = await service.processImages([UIImage()])
+        XCTAssertEqual(stub.callCount, 1,
+                       "Pipeline collapsed to single pass — extractor should be called exactly once per image")
+        XCTAssertEqual(batch.perImage[0].winningScore?.reconstruction, .row)
+        XCTAssertEqual(batch.successfulResults.count, 1)
+        XCTAssertEqual(batch.perImage[0].allScores.count, 2,
+                       "Expected scores for both row and column reconstructions")
     }
 }

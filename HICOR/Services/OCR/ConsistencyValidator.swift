@@ -7,21 +7,19 @@ struct ConsistencyValidator {
         let message: String?
     }
 
-    static let signMismatchPhotoCountThresholdForOverride = 3
     static let sphSpreadThreshold = 0.75
     static let cylSpreadThreshold = 0.75
 
-    func validate(_ results: [PrintoutResult], photoCount: Int) -> Outcome {
+    // v1 scope reduction (2026-04-17): validate operates on a single printout.
+    // The photoCount-driven hardBlock/warningOverridable split was meaningful
+    // only when multi-photo capture provided extra signal to demand before
+    // hard-blocking; with one photo there is no "ask for more" path, so any
+    // sign mismatch is always overridable.
+    func validate(_ results: [PrintoutResult]) -> Outcome {
         let rightSPHs = results.compactMap { $0.rightEye }.flatMap { $0.readings.map(\.sph) }
         let leftSPHs  = results.compactMap { $0.leftEye  }.flatMap { $0.readings.map(\.sph) }
 
         if let mismatch = signMismatch(right: rightSPHs, left: leftSPHs) {
-            if photoCount < ConsistencyValidator.signMismatchPhotoCountThresholdForOverride {
-                return Outcome(
-                    result: .hardBlock,
-                    message: "Right and left eyes have opposite corrections (\(mismatch)). Please capture additional printouts."
-                )
-            }
             return Outcome(
                 result: .warningOverridable,
                 message: "Right and left eyes have opposite corrections (\(mismatch)). Verify before continuing."

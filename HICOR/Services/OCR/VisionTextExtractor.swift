@@ -1,3 +1,8 @@
+// FALLBACK ONLY. The active extractor is MLKitTextExtractor (see OCRService.init).
+// Kept in-tree so OCRService can revert by changing one line if ML Kit fails.
+// Reconstruction statics (computeAdaptiveThresholds, reconstructRows,
+// reconstructColumnarLines) are reused by MLKitTextExtractor.
+
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation

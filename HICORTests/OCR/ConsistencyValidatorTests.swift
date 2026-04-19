@@ -23,29 +23,25 @@ final class ConsistencyValidatorTests: XCTestCase {
         return PrintoutResult(rightEye: right, leftEye: left, pd: nil, machineType: .desktop, sourcePhotoIndex: photoIndex, rawText: "")
     }
 
-    func testSignMismatchWithTwoPhotosTriggersHardBlock() {
+    func testSignMismatchOnSinglePhotoIsOverridable() {
+        // v1 scope reduction: with one photo there is no "ask for more printouts"
+        // path, so any sign mismatch is warningOverridable, never hardBlock.
         let r = makeResult(rightSPHs: [+1.50], leftSPHs: [-2.00])
-        let outcome = ConsistencyValidator().validate([r], photoCount: 2)
-        XCTAssertEqual(outcome.result, .hardBlock)
-        XCTAssertNotNil(outcome.message)
-    }
-
-    func testSignMismatchWithThreePhotosIsOverridable() {
-        let r = makeResult(rightSPHs: [+1.50], leftSPHs: [-2.00])
-        let outcome = ConsistencyValidator().validate([r], photoCount: 3)
+        let outcome = ConsistencyValidator().validate([r])
         XCTAssertEqual(outcome.result, .warningOverridable)
+        XCTAssertNotNil(outcome.message)
     }
 
     func testTightSpreadWithinThresholdIsOK() {
         let r = makeResult(rightSPHs: [-2.00, -2.25, -2.00], leftSPHs: [-2.00, -2.25, -2.25])
-        let outcome = ConsistencyValidator().validate([r], photoCount: 3)
+        let outcome = ConsistencyValidator().validate([r])
         XCTAssertEqual(outcome.result, .ok)
     }
 
     func testSPHSpreadAboveThresholdIsOverridable() {
         // Spread of 1.00 D > 0.75 D threshold
         let r = makeResult(rightSPHs: [-2.00, -3.00, -2.50], leftSPHs: [-2.00, -2.25])
-        let outcome = ConsistencyValidator().validate([r], photoCount: 3)
+        let outcome = ConsistencyValidator().validate([r])
         XCTAssertEqual(outcome.result, .warningOverridable)
         XCTAssertNotNil(outcome.message)
     }
@@ -66,7 +62,7 @@ final class ConsistencyValidatorTests: XCTestCase {
         let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
         let left  = EyeReading(id: UUID(), eye: .left,  readings: rLeft,  machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
         let result = PrintoutResult(rightEye: right, leftEye: left, pd: nil, machineType: .handheld, sourcePhotoIndex: 0, rawText: "")
-        let outcome = ConsistencyValidator().validate([result], photoCount: 3)
+        let outcome = ConsistencyValidator().validate([result])
         XCTAssertEqual(outcome.result, .ok, "Implausible SPH must be filtered out, leaving both eyes negative → ok")
     }
 
@@ -84,7 +80,7 @@ final class ConsistencyValidatorTests: XCTestCase {
         let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
         let left  = EyeReading(id: UUID(), eye: .left,  readings: rLeft,  machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
         let result = PrintoutResult(rightEye: right, leftEye: left, pd: nil, machineType: .handheld, sourcePhotoIndex: 0, rawText: "")
-        let outcome = ConsistencyValidator().validate([result], photoCount: 3)
+        let outcome = ConsistencyValidator().validate([result])
         XCTAssertEqual(outcome.result, .ok, "isSphOnly placeholders must not trigger cyl spread warning")
     }
 
@@ -94,7 +90,7 @@ final class ConsistencyValidatorTests: XCTestCase {
         let rRight = [RawReading(id: UUID(), sph: +1.50, cyl: -0.50, ax: 90, eye: .right, sourcePhotoIndex: 0)]
         let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)
         let result = PrintoutResult(rightEye: right, leftEye: nil, pd: nil, machineType: .handheld, sourcePhotoIndex: 0, rawText: "")
-        let outcome = ConsistencyValidator().validate([result], photoCount: 2)
+        let outcome = ConsistencyValidator().validate([result])
         XCTAssertEqual(outcome.result, .ok, "Blind-eye cases must not trigger sign mismatch")
     }
 }

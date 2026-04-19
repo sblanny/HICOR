@@ -49,11 +49,12 @@ HICOR/
 | `Views/SessionSetupView.swift` | Launch screen: date + location, pre-filled from `SessionSettings.load()` |
 | `Views/PatientEntryView.swift` | Numeric patient number entry with auto-focus |
 | `Views/PhotoCaptureView.swift` | 2–5 photo capture, thumbnail row, PD banner, DEBUG simulate-no-PD toggle |
-| `Views/CameraPickerView.swift` | `UIImagePickerController` wrapper; falls back to `.photoLibrary` on simulator |
+| `Views/CaptureView.swift` | AVFoundation full-screen capture with torch toggle and a 4:3 framing guide. Replaces the old `CameraPickerView` to give the ROI pipeline well-framed, user-torch-lit captures. |
 | `Views/FullScreenPhotoView.swift` | Pinch + double-tap zoom viewer for thumbnails |
 | `Views/AnalysisPlaceholderView.swift` | Spinner screen; runs OCR pipeline + ConsistencyValidator; presents hard-block/overridable/error alerts; on success builds in-memory `PatientRefraction` and navigates to `PrescriptionAnalysisView`. Does NOT save — persistence happens on Save & Return |
 | `Views/PrescriptionAnalysisView.swift` | Read-only review of parsed readings per photo (per-eye SPH/CYL/AX, machine AVG/`*` line + confidence, low-confidence styling, PD). Save & Return calls `sync.save(refraction)` then posts `.hicorReturnToRoot` |
-| `Services/OCR/VisionTextExtractor.swift` | `TextExtracting` protocol + `VNRecognizeTextRequest` impl. **`usesLanguageCorrection = false`** — required for numeric accuracy; language correction mangles autorefractor digits |
+| `Services/OCR/VisionTextExtractor.swift` | **Fallback only.** Holds the `TextExtracting` protocol, `ExtractedText`/`TextBox` structs, and the reconstruction helpers (`computeAdaptiveThresholds`, `reconstructRows`, `reconstructColumnarLines`) that `MLKitTextExtractor` reuses. The Vision implementation of `TextExtracting` remains so the default extractor can be reverted by one line. Do not add Vision-only tuning here. |
+| `Services/OCR/MLKitTextExtractor.swift` | Default `TextExtracting` implementation. Wraps `MLKitTextRecognition.TextRecognizer`, converts ML Kit `Text.blocks.lines` to `[TextBox]` (pixel → Vision-normalized coordinates with Y flip), then calls `VisionTextExtractor`'s static reconstruction helpers. `PreprocessingVariant` + `revision` params are accepted for protocol stability but ignored — ML Kit handles preprocessing internally. Per-line confidence is hardcoded `1.0` (Swift API does not expose it). |
 | `Services/OCR/PrintoutResult.swift` | Codable carrier struct: per-eye `EyeReading`, optional PD, machine type, source photo index, raw text, optional handheld `*` confidence per eye |
 | `Services/OCR/PrintoutParser.swift` | Detects desktop vs handheld (`-REF-` → handheld; `AVG`/`GRK`/`Highlands` → desktop; `*`+brackets fallback → handheld) and routes |
 | `Services/OCR/DesktopFormatParser.swift` | Parses `[R]`/`<R>` and `[L]`/`<L>` sections, AVG line per eye, and `PD: NN mm` |
@@ -81,7 +82,7 @@ HICOR/
 ## Coding Conventions
 
 - Swift 5.10+, SwiftUI, async/await for async work.
-- No third-party dependencies. Apple SDKs only.
+- Third-party dependencies: **Google ML Kit Text Recognition** only, via CocoaPods. All other code is Apple SDKs. See **Text Extraction (Google ML Kit)** below for why and how.
 - One type per file, named after the type.
 - Models are `struct` unless they need SwiftData persistence (`@Model class`).
 - Services are `final class` (reference semantics) with a `static let shared` plus an `init` overload that accepts dependencies for tests.
@@ -124,8 +125,22 @@ See `RESEARCH.md` for sources, light-pass conclusions, and the **✅ Final Decis
 
 ## Known Limitations
 
-- **OCR may extract fewer readings than printed** (e.g. 5 of 8) when Vision fragments a reading line onto multiple observations and only the SPH column survives reconstruction. This is acceptable — averaging with 5 good readings still produces a clinically valid prescription. Phase 9 polish may improve fragment-joining heuristics.
+- **v1 scope: exactly one photo per patient.** `Constants.minPhotosRequired` and `Constants.maxPhotosAllowed` are both `1` while we stabilize single-photo OCR end-to-end with ML Kit. This removes multi-photo aggregation, cross-photo averaging, and the photo-count-driven hardBlock branch of `ConsistencyValidator` as debugging variables. The `.hardBlock` enum case and alert branch are kept in place (unreachable today) so that restoring multi-photo capture is a surgical change: raise `maxPhotosAllowed`, reintroduce the `photoCount` parameter to `ConsistencyValidator.validate`, and restore the "Please capture additional printouts" hard-block message. Phase 5 averaging and `Docs/RESEARCH.md` M/J0/J45 work continue to assume multi-photo eventually comes back — do not delete averaging code on the single-photo branch.
+- **OCR may extract fewer readings than printed** (e.g. 5 of 8) when the recognizer fragments a reading line onto multiple observations and only the SPH column survives reconstruction. Less frequent on ML Kit than it was on Vision, but still possible. Averaging with 5 good readings still produces a clinically valid prescription.
 - **SPH-only readings are valid clinical data.** Some autorefractor measurements print SPH with no CYL/AX (the machine detected no astigmatism on that sample). Both parsers accept these and store `RawReading` with `isSphOnly = true` and placeholder `cyl = 0.0`, `ax = 0`. `ConsistencyValidator` already filters them out of the cyl spread check. **Phase 5 averaging must also filter on `isSphOnly`**: include the SPH value in the SPH average, but exclude the placeholder cyl/ax from any J0/J45 vector decomposition or CYL/AX averaging. Treat them as "SPH-contributing only" peers.
+
+## v1 Scope: Desktop Format Only
+
+For the May 1 mission trip, HICOR v1 supports the GRK-6000 desktop autorefractor format only. The handheld format is deferred to a post-trip phase due to dramatically more complex OCR characteristics (8 readings per eye, ambiguous markers, smaller font, tighter spacing).
+
+Volunteers should be instructed to use the desktop machine as the primary instrument. If only the handheld is available, the operator must record the prescription manually using the existing FileMaker workflow.
+
+Format detection:
+- Desktop: presence of `GRK-6000` or `Highlands Optical` in OCR text
+- Handheld: presence of `[R]` or `-REF-` without `GRK-6000` marker
+- Unknown: present error to operator, do not attempt parse
+
+The user has multiple desktop printout photos available for testing. Wait for the user to provide one before claiming desktop extraction works — do not invent synthetic desktop fixtures (per memory `feedback_test_fixtures_real_data.md`).
 
 ## Persistence Architecture
 
@@ -155,11 +170,66 @@ After any OCR pipeline change, validate against real handheld printouts before s
 
 **ParseScorer weights are provisional.** The weights (0.50 / 0.25 / 0.15 / 0.10) in `OCRService.swift` shipped on 2026-04-16 **uncalibrated**: the only real-capture debug logs available at that time were from a single patient's printout, and calibrating against one capture would overfit. The scorer emits verbose per-call logging (variant / reconstruction / revision / readings / component scores / total) so field captures from mixed patients can be replayed offline for calibration. Revisit weights once ≥5 captures from **distinct** printouts are available (the May 1 mission trip is the expected source).
 
+## Text Extraction (Google ML Kit)
+
+### Why ML Kit, not Apple Vision
+
+Real-device testing of Apple Vision (`VNRecognizeTextRequest`) on the handheld autorefractor printout showed repeated fragmentation of decimal numbers — e.g. `+1.25` recognized as two separate observations (`+1` and `25`) with no coordinate relationship the reconstruction code could stitch. Multi-pass scoring across preprocessing variants and revisions did not close the gap. See `OCR_ASSESSMENT.md` and `CODEX_OCR_REVIEW.md` for the diagnosis that led to the swap.
+
+Google ML Kit Text Recognition v2 produces a `Block → Line → Element` hierarchy with atomic decimal tokens and cleaner row segmentation on device. The protocol boundary (`TextExtracting`) is unchanged — only the implementation is swapped. `VisionTextExtractor` is retained as a one-line-revert fallback.
+
+### Integration: CocoaPods + xcodegen hybrid
+
+**Build entry point:** `HICOR.xcworkspace` (not `HICOR.xcodeproj`). CocoaPods' Pods project lives in the workspace; building the bare `.xcodeproj` will fail to link ML Kit.
+
+Fresh clone setup:
+
+```bash
+xcodegen generate        # produces HICOR.xcodeproj from project.yml
+pod install              # produces HICOR.xcworkspace and Pods/
+open HICOR.xcworkspace   # always open the workspace, never the project
+```
+
+**Rules of thumb:**
+- After any `project.yml` change → `xcodegen generate && pod install`. xcodegen rewrites the `.xcodeproj`; `pod install` re-integrates the Pods target into the workspace.
+- `Podfile` pins `GoogleMLKit/TextRecognition` unqualified (latest). Version bump: edit `Podfile`, run `pod update GoogleMLKit/TextRecognition`, commit `Podfile.lock`.
+- `HICOR.xcworkspace/` is tracked (CocoaPods owns it). `Pods/` is gitignored; re-fetched via `pod install`.
+- The `Podfile` `post_install` hook sets `EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64` — ML Kit's static .framework ships an arm64 iOS-device slice but no arm64 simulator slice, so Apple Silicon simulator builds must run x86_64 via Rosetta. The hook also lifts pod deployment targets to iOS 17 to silence Xcode 26 warnings about pre-iOS-12 minimums in transitive pods.
+- `project.yml` sets `ENABLE_USER_SCRIPT_SANDBOXING: NO` at the workspace level because the `[CP] Embed Pods Frameworks` run-script writes to paths outside its declared outputs; sandboxing it fails the build with `rsync … Operation not permitted`.
+
+**Required local tool:** `cocoapods` (`brew install cocoapods`). There is no SPM path — Google does not publish ML Kit as a Swift package, and manual xcframework vendoring failed because six of the transitive pods ship source-only.
+
+### Coordinate system
+
+ML Kit returns each line's `frame` in **image pixel coordinates, top-left origin**. `TextBox` (and everything downstream — row clustering, section detection, column reconstruction) expects **Vision-normalized 0–1 coordinates, bottom-left origin**. `MLKitTextExtractor.toTextBoxes(_:imageSize:)` performs the Y-flip and normalization. If the flip is ever removed, row sorting reverses and every section marker lands on the wrong side. Covered by the existing reconstruction tests in `VisionTextExtractorTests`.
+
+### Confidence
+
+`MLKTextLine` in ML Kit v2's Swift API does not expose a per-line confidence. `MLKitTextExtractor` hardcodes `confidence = 1.0`, which means the 10% confidence weight in `ParseScorer` (`OCRService.swift`) currently goes uniform across reconstructions. Acceptable for single-pass scoring (the confidence weight is the tiebreaker, not the signal). If multi-pass returns, derive a heuristic confidence from line content (digit density, length, marker presence) rather than trusting ML Kit 1.0 values.
+
+### Rollback
+
+If a future ML Kit regression makes results worse than Vision, change `OCRService.swift:126` from `MLKitTextExtractor()` back to `VisionTextExtractor()`. The Vision path is kept compiled and tested exactly so this revert is a one-line change.
+
 ## Build & Test
 
 ```bash
 xcodegen generate
-xcodebuild -project HICOR.xcodeproj -scheme HICOR \
+pod install
+xcodebuild -workspace HICOR.xcworkspace -scheme HICOR \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   test CODE_SIGNING_ALLOWED=NO
 ```
+
+For real-device test runs use `-destination 'id=<device-UDID>' -allowProvisioningUpdates`. The iOS 26 Apple Silicon simulator cannot currently launch HICOR because ML Kit lacks an arm64 simulator slice — use an Intel-archive simulator image, Rosetta, or a physical device.
+
+## ROI pipeline rollback
+
+The default OCR extractor is `ROIPipelineExtractor(fallback: MLKitTextExtractor())`.
+If ROI-based extraction needs to be disabled:
+
+- One-line revert: change `HICOR/Services/OCR/OCRService.swift` init default back to `MLKitTextExtractor()`.
+- `ROIPipelineExtractor` and all supporting files (`HICOR/Services/OCR/ROI/`, `HICOR/Services/OCR/Preprocessing/`) can stay in the repo dormant.
+- `CaptureView` can be reverted to the old `CameraPickerView` independently — git history holds the original `CameraPickerView.swift` (see the "refactor: replace CameraPickerView with CaptureView" commit), or re-create the stock `UIImagePickerController` wrapper.
+
+The ROI pipeline is designed to be a pure swap behind the `TextExtracting` protocol: rolling back touches one line of production code.

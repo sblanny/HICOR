@@ -20,8 +20,9 @@ final class ConstantsTests: XCTestCase {
     }
 
     func testPhotoBoundsConstants() {
-        XCTAssertEqual(Constants.minPhotosRequired, 2)
-        XCTAssertEqual(Constants.maxPhotosAllowed, 5)
+        // v1 scope reduction: exactly one photo per capture.
+        XCTAssertEqual(Constants.minPhotosRequired, 1)
+        XCTAssertEqual(Constants.maxPhotosAllowed, 1)
         XCTAssertEqual(Constants.cloudKitContainerID, "iCloud.com.creativearchives.hicor")
     }
 }
