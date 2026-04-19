@@ -14,15 +14,10 @@ final class ConstantsTests: XCTestCase {
         XCTAssertEqual(decoded, [.desktop, .handheld])
     }
 
-    func testConsistencyResultCases() {
-        let all: [ConsistencyResult] = [.ok, .warningOverridable, .hardBlock]
-        XCTAssertEqual(all.count, 3)
-    }
-
     func testPhotoBoundsConstants() {
-        // v1 scope reduction: exactly one photo per capture.
-        XCTAssertEqual(Constants.minPhotosRequired, 1)
-        XCTAssertEqual(Constants.maxPhotosAllowed, 1)
+        // Clinical requirement per MIKE_RX_PROCEDURE.md: 2–5 printouts per patient.
+        XCTAssertEqual(Constants.minPhotosRequired, 2)
+        XCTAssertEqual(Constants.maxPhotosAllowed, 5)
         XCTAssertEqual(Constants.cloudKitContainerID, "iCloud.com.creativearchives.hicor")
     }
 }

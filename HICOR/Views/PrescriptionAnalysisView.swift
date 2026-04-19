@@ -3,6 +3,7 @@ import SwiftUI
 struct PrescriptionAnalysisView: View {
     let refraction: PatientRefraction
     let results: [PrintoutResult]
+    var droppedOutliers: [ConsistencyValidator.DroppedReading] = []
 
     @Environment(SyncCoordinator.self) private var sync
     @State private var saving = false
@@ -11,6 +12,10 @@ struct PrescriptionAnalysisView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+
+                if !droppedOutliers.isEmpty {
+                    outlierBanner
+                }
 
                 ForEach(Array(results.enumerated()), id: \.offset) { idx, result in
                     photoCard(index: idx, result: result)
@@ -50,6 +55,29 @@ struct PrescriptionAnalysisView: View {
             }
         }
         .padding(.bottom, 4)
+    }
+
+    private var outlierBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("⚠ \(droppedOutliers.count) reading\(droppedOutliers.count == 1 ? "" : "s") excluded")
+                .font(.headline)
+                .foregroundStyle(.red)
+            ForEach(Array(droppedOutliers.enumerated()), id: \.offset) { _, dropped in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(dropped.eye == .right ? "Right" : "Left") eye, photo \(dropped.photoIndex + 1)")
+                        .font(.caption.weight(.semibold))
+                    Text(dropped.reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding()
+        .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12).stroke(Color.red.opacity(0.4), lineWidth: 1)
+        )
     }
 
     private func photoCard(index: Int, result: PrintoutResult) -> some View {

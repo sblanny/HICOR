@@ -29,15 +29,15 @@ struct AnalysisPlaceholderView: View {
     // SwiftUI footgun — only the outermost reliably presents, the others may
     // silently fail. One alert state, one modifier, switch on the case.
     private enum AlertState: Identifiable {
-        case hardBlock(message: String)
-        case overridable(message: String)
+        case addPhoto(message: String)
+        case escalate(message: String)
         case error(message: String, snapshot: OCRDebugSnapshot?)
 
         var id: String {
             switch self {
-            case .hardBlock:   return "hardBlock"
-            case .overridable: return "overridable"
-            case .error:       return "error"
+            case .addPhoto: return "addPhoto"
+            case .escalate: return "escalate"
+            case .error:    return "error"
             }
         }
     }
@@ -45,6 +45,7 @@ struct AnalysisPlaceholderView: View {
     private struct NavigationPayload {
         let refraction: PatientRefraction
         let results: [PrintoutResult]
+        let droppedOutliers: [ConsistencyValidator.DroppedReading]
     }
 
     var body: some View {
@@ -63,28 +64,17 @@ struct AnalysisPlaceholderView: View {
         }
         .alert(item: $alertState) { state in
             switch state {
-            case .hardBlock(let message):
+            case .addPhoto(let message):
                 return Alert(
-                    title: Text("Cannot continue"),
+                    title: Text("Readings don't agree"),
                     message: Text(message),
-                    dismissButton: .default(Text("Back to Photo")) { dismiss() }
+                    dismissButton: .default(Text("Add another printout")) { dismiss() }
                 )
-            case .overridable(let message):
+            case .escalate(let message):
                 return Alert(
-                    title: Text("Inconsistent readings"),
+                    title: Text("Consult team leader"),
                     message: Text(message),
-                    primaryButton: .default(Text("Override and Continue")) {
-                        if let payload = navigation {
-                            payload.refraction.consistencyWarningOverridden = true
-                            OCRLog.logger.info("OCR nav: override accepted")
-                            phase = .advancing
-                            presentAnalysis = true
-                        } else {
-                            OCRLog.logger.error("OCR nav: override tapped with nil payload")
-                            dismiss()
-                        }
-                    },
-                    secondaryButton: .cancel(Text("Back to Photo")) { dismiss() }
+                    dismissButton: .default(Text("Start over")) { dismiss() }
                 )
             case .error(let message, let snapshot):
                 #if DEBUG
@@ -121,7 +111,8 @@ struct AnalysisPlaceholderView: View {
             if let payload = navigation {
                 PrescriptionAnalysisView(
                     refraction: payload.refraction,
-                    results: payload.results
+                    results: payload.results,
+                    droppedOutliers: payload.droppedOutliers
                 )
             } else {
                 // Defensive fallback: binding flipped to true but payload is nil.
@@ -178,19 +169,23 @@ struct AnalysisPlaceholderView: View {
 
         let validator = ConsistencyValidator()
         let outcome = validator.validate(results)
-        navigation = NavigationPayload(refraction: refraction, results: results)
-        OCRLog.logger.info("OCR nav: consistency=\(String(describing: outcome.result), privacy: .public)")
+        OCRLog.logger.info("OCR nav: consistency=\(String(describing: outcome), privacy: .public)")
 
-        switch outcome.result {
-        case .ok:
+        switch outcome {
+        case .consistent(let droppedOutliers):
+            navigation = NavigationPayload(
+                refraction: refraction,
+                results: results,
+                droppedOutliers: droppedOutliers
+            )
             phase = .advancing
             presentAnalysis = true
-        case .warningOverridable:
+        case .inconsistentAddPhoto(let reason, let currentCount):
             phase = .awaitingDecision
-            alertState = .overridable(message: outcome.message ?? "Readings are inconsistent. Verify before continuing.")
-        case .hardBlock:
+            alertState = .addPhoto(message: "\(reason). You have \(currentCount) of up to \(Constants.maxPhotosAllowed) printouts — please capture another.")
+        case .inconsistentEscalate(let reason):
             phase = .awaitingDecision
-            alertState = .hardBlock(message: outcome.message ?? "Readings cannot be reconciled. Retake the photo.")
+            alertState = .escalate(message: "Five printouts captured but readings still don't agree (\(reason)). Please consult your team leader before proceeding.")
         }
     }
 

@@ -20,7 +20,7 @@ struct PhotoCaptureView: View {
 
             addPhotoButton
 
-            Text(state.photos.count == 1 ? "Photo ready" : "Take one photo")
+            Text(counterText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -181,13 +181,32 @@ struct PhotoCaptureView: View {
             }
             navigateToAnalysis = true
         } label: {
-            Text("Analyze Prescription")
+            Text(analyzeButtonLabel)
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding()
         }
         .buttonStyle(.borderedProminent)
         .disabled(!state.canAnalyze)
+    }
+
+    private var counterText: String {
+        let count = state.photos.count
+        let min = Constants.minPhotosRequired
+        let max = Constants.maxPhotosAllowed
+        if count < min {
+            return "\(count) of \(min) minimum"
+        }
+        if count < max {
+            let remaining = max - count
+            return "\(count) photo\(count == 1 ? "" : "s") captured (add up to \(remaining) more)"
+        }
+        return "\(count) photos (maximum)"
+    }
+
+    private var analyzeButtonLabel: String {
+        let count = state.photos.count
+        return "Analyze \(count) Photo\(count == 1 ? "" : "s")"
     }
 }
 

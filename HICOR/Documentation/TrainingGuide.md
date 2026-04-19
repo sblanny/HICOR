@@ -23,13 +23,13 @@ You only need to do this once per day.
 
 ## Photographing a Printout
 
-1. Place the printout slip on a flat, well-lit surface.
+1. Place each printout slip on a flat, well-lit surface.
 2. Make sure all numbers and the entire slip fit in the camera view.
-3. Tap the shutter to take **one photo** of the autorefractor printout.
-4. If the photo looks blurry or cut off, tap the **✕** on its thumbnail and retake it.
-5. When the photo looks good, tap **Analyze Prescription**.
+3. **Take 2 printouts minimum.** Every patient is scanned on the autorefractor 2–5 times. Photograph each printout.
+4. If a photo looks blurry or cut off, tap the **✕** on its thumbnail and retake it.
+5. When all your photos look good, tap **Analyze Prescription**.
 
-> **Note for v1:** HICOR currently captures one photo per patient while we stabilize the OCR pipeline. A future version will support 2–5 photos with cross-photo averaging for higher accuracy. For now, a single clear photo is all you need.
+> **If the app prompts for another photo**, the readings from the printouts you captured don't agree well enough to trust. Take another printout on the autorefractor and add it. If after **5 printouts** the readings still don't agree, **consult the team leader** — don't override.
 
 **Tips for a good photo:**
 - Hold the phone parallel to the printout — don't tilt.
@@ -38,11 +38,17 @@ You only need to do this once per day.
 
 ## What the Warnings Mean
 
-### Warning (Yellow — can override)
+### "Readings don't agree — add another printout"
 
-> "Right and left eyes have opposite corrections. Verify before continuing."
+The photos you captured disagree on this patient's prescription. Take another printout on the autorefractor and photograph it. HICOR keeps your existing photos; just add one more.
 
-The photo shows one eye needing plus correction and the other needing minus correction. That *can* happen with real patients but is worth a double-check. Confirm the printout matches what you see on screen. If you're confident the printout is correct, tap **Override and Continue**. The record will be saved with a note that you overrode the warning.
+### "Consult team leader"
+
+You've captured 5 printouts and the readings still disagree. Stop and get the team leader — don't try to average noise into a prescription.
+
+### Red "reading excluded" banner on the results screen
+
+HICOR dropped one reading from the average because the other printouts agreed and that one didn't. The banner shows which eye, which photo, and why. The final prescription is calculated from the remaining readings. This is informational — no action needed unless the exclusion looks wrong to you, in which case raise it with the team leader.
 
 ### Red PD Banner
 
