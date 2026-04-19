@@ -174,6 +174,10 @@ After any OCR pipeline change, validate against real handheld printouts before s
 
 **ParseScorer weights are provisional.** The weights (0.50 / 0.25 / 0.15 / 0.10) in `OCRService.swift` shipped on 2026-04-16 **uncalibrated**: the only real-capture debug logs available at that time were from a single patient's printout, and calibrating against one capture would overfit. The scorer emits verbose per-call logging (variant / reconstruction / revision / readings / component scores / total) so field captures from mixed patients can be replayed offline for calibration. Revisit weights once ≥5 captures from **distinct** printouts are available (the May 1 mission trip is the expected source).
 
+## Phase 5 input
+
+Phase 5 (prescription averaging) operates on the full `[PrintoutResult]` array (2–5 elements) produced by the OCR pipeline. See `RESEARCH.md` for the Thibos M/J0/J45 power-vector algorithm + k=3 MAD outlier rejection, and `MIKE_RX_PROCEDURE.md` for clinical input expectations and the Phase 5 input shape section.
+
 ## Text Extraction (Google ML Kit)
 
 ### Why ML Kit, not Apple Vision
