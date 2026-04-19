@@ -77,7 +77,7 @@ enum ParseScorer {
                   + wMarkerContinuity * markerContinuity
                   + wConfidence * confidence
 
-        print("ParseScorer: variant=\(extraction.variant.rawValue) reconstruction=\(reconstruction.rawValue) revision=\(extraction.revisionUsed) readings=\(readings) readingScore=\(String(format: "%.3f", readingScore)) completeness=\(completeness) markerContinuity=\(String(format: "%.3f", markerContinuity)) confidence=\(String(format: "%.3f", confidence)) total=\(String(format: "%.3f", total))")
+        OCRLog.logger.info("ParseScorer variant=\(extraction.variant.rawValue, privacy: .public) recon=\(reconstruction.rawValue, privacy: .public) rev=\(extraction.revisionUsed) reads=\(readings) readScore=\(readingScore, format: .fixed(precision: 3)) complete=\(completeness, format: .fixed(precision: 2)) markers=\(markerContinuity, format: .fixed(precision: 3)) conf=\(confidence, format: .fixed(precision: 3)) total=\(total, format: .fixed(precision: 3))")
         return VariantScore(
             variant: extraction.variant,
             reconstruction: reconstruction,
@@ -204,7 +204,7 @@ final class OCRService {
         }()
         let printoutIfUsable = hasReadings ? winningPrintout : nil
 
-        print("OCRService: winning reconstruction=\(winningScore?.reconstruction.rawValue ?? "none") readings=\(winningScore?.validReadingCount ?? 0) score=\(winningScore?.totalScore ?? 0)")
+        OCRLog.logger.info("OCR strategy=\(winningScore?.reconstruction.rawValue ?? "none", privacy: .public) reads=\(winningScore?.validReadingCount ?? 0) score=\(winningScore?.totalScore ?? 0, format: .fixed(precision: 3))")
 
         return OCRImageResult(
             photoIndex: photoIndex,

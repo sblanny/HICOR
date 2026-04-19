@@ -104,7 +104,6 @@ enum HandheldFormatParser {
         // AQ/E. Each diopter token must be a quarter-diopter decimal — bare
         // integer tokens are NEVER spheres or cylinders, only axes or garbage.
         guard ReadingLineShape.matches(trimmed, allowQualityMarker: true) else {
-            print("Parser: rejecting handheld line '\(line)' — reason: shape mismatch")
             return nil
         }
 
@@ -120,7 +119,6 @@ enum HandheldFormatParser {
            ReadingPlausibility.isPlausibleSPH(sph),
            ReadingPlausibility.isPlausibleCYL(cyl),
            ReadingPlausibility.isPlausibleAX(ax) {
-            print("Parser: accepted handheld line '\(line)' as SPH=\(sph) CYL=\(cyl) AX=\(ax)")
             return (sph, cyl, ax, qualityToken == "E", false)
         }
         // Machine printed SPH only (no astigmatism detected on this measurement).
@@ -128,10 +126,8 @@ enum HandheldFormatParser {
            numerics[0].contains("."),
            let sph = Double(numerics[0]),
            ReadingPlausibility.isPlausibleSPH(sph) {
-            print("Parser: accepted handheld SPH-only line '\(line)' as SPH=\(sph)")
             return (sph, 0.0, 0, qualityToken == "E", true)
         }
-        print("Parser: rejecting handheld line '\(line)' — reason: range or token count")
         return nil
     }
 

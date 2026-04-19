@@ -39,16 +39,10 @@ struct ConsistencyValidator {
         // nonsense averages and false sign-mismatch alerts.
         let plausibleRight = right.filter { ReadingPlausibility.isPlausibleSPH($0) }
         let plausibleLeft  = left.filter  { ReadingPlausibility.isPlausibleSPH($0) }
-        if plausibleRight.count != right.count {
-            print("ConsistencyValidator: dropped \(right.count - plausibleRight.count) implausible right-eye SPH values before averaging")
-        }
-        if plausibleLeft.count != left.count {
-            print("ConsistencyValidator: dropped \(left.count - plausibleLeft.count) implausible left-eye SPH values before averaging")
-        }
         guard !plausibleRight.isEmpty, !plausibleLeft.isEmpty else { return nil }
         let rAvg = plausibleRight.reduce(0, +) / Double(plausibleRight.count)
         let lAvg = plausibleLeft.reduce(0, +)  / Double(plausibleLeft.count)
-        print("ConsistencyValidator: R_avgSPH=\(rAvg) (n=\(plausibleRight.count)), L_avgSPH=\(lAvg) (n=\(plausibleLeft.count))")
+        OCRLog.logger.debug("Consistency avg sph r=\(rAvg, format: .fixed(precision: 2)) n=\(plausibleRight.count) l=\(lAvg, format: .fixed(precision: 2)) n=\(plausibleLeft.count)")
         if rAvg > 0.25 && lAvg < -0.25 {
             return "right eye plus, left eye minus"
         }

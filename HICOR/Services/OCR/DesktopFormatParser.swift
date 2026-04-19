@@ -90,7 +90,6 @@ enum DesktopFormatParser {
             sphSignHint = avgSPH < 0 ? -1 : 1
         } else {
             sphSignHint = -1
-            print("Parser: no AVG line for \(eye); defaulting unsigned SPH to negative")
         }
 
         var readings: [RawReading] = []
@@ -141,7 +140,6 @@ enum DesktopFormatParser {
         // a quarter-diopter decimal like "+ 1.50" or "- 21.00". Bare integers are
         // NEVER spheres or cylinders — they are axes or OCR fragmentation garbage.
         guard ReadingLineShape.matches(trimmed, allowQualityMarker: false) else {
-            print("Parser: rejecting desktop line '\(line)' — reason: shape mismatch")
             return nil
         }
 
@@ -157,7 +155,6 @@ enum DesktopFormatParser {
             // unsigned values to negative (ML Kit drops thin minus signs
             // on thermal paper).
             if cylToken.hasPrefix("+") {
-                print("Parser: rejecting desktop line '\(line)' — explicit + CYL invalid")
                 return nil
             }
             let cylSigned = cylToken.hasPrefix("-") ? cylToken : "-" + cylToken
@@ -175,7 +172,6 @@ enum DesktopFormatParser {
                ReadingPlausibility.isPlausibleSPH(sph),
                ReadingPlausibility.isPlausibleCYL(cyl),
                ReadingPlausibility.isPlausibleAX(ax) {
-                print("Parser: accepted desktop line '\(line)' as SPH=\(sph) CYL=\(cyl) AX=\(ax)")
                 return (sph, cyl, ax, false)
             }
         }
@@ -189,11 +185,9 @@ enum DesktopFormatParser {
                 return (hint < 0 ? "-" : "+") + token
             }()
             if let sph = Double(signedToken), ReadingPlausibility.isPlausibleSPH(sph) {
-                print("Parser: accepted desktop SPH-only line '\(line)' as SPH=\(sph)")
                 return (sph, 0.0, 0, true)
             }
         }
-        print("Parser: rejecting desktop line '\(line)' — reason: range or token count")
         return nil
     }
 

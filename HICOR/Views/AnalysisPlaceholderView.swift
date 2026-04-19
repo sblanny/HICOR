@@ -76,11 +76,11 @@ struct AnalysisPlaceholderView: View {
                     primaryButton: .default(Text("Override and Continue")) {
                         if let payload = navigation {
                             payload.refraction.consistencyWarningOverridden = true
-                            print("=== OCR nav: override accepted, navigating to PrescriptionAnalysisView ===")
+                            OCRLog.logger.info("OCR nav: override accepted")
                             phase = .advancing
                             presentAnalysis = true
                         } else {
-                            print("=== OCR nav: override tapped but navigation payload missing — dismissing ===")
+                            OCRLog.logger.error("OCR nav: override tapped with nil payload")
                             dismiss()
                         }
                     },
@@ -137,10 +137,10 @@ struct AnalysisPlaceholderView: View {
 
     @MainActor
     private func runOCR() async {
-        print("=== OCR nav: runOCR started (\(photos.count) photos) ===")
+        OCRLog.logger.info("OCR nav: runOCR started photos=\(photos.count)")
         let images = photos.compactMap { UIImage(data: $0) }
         guard !images.isEmpty else {
-            print("=== OCR nav: no decodable images — presenting error alert ===")
+            OCRLog.logger.error("OCR nav: no decodable images")
             presentError("No usable photo was captured.", snapshot: nil)
             return
         }
@@ -148,16 +148,9 @@ struct AnalysisPlaceholderView: View {
         let batch = await ocr.processImages(images)
         debugSnapshot = batch.debugSnapshot
 
-        for entry in batch.debugSnapshot.entries {
-            print("=== OCR Debug: Photo \(entry.photoIndex + 1) ===")
-            print("Winning variant: \(entry.winningVariant ?? "none") revision=\(entry.revisionUsed.map(String.init) ?? "n/a") strategy=\(entry.chosenStrategy)")
-            if let err = entry.parseError { print("Parse error: \(err)") }
-            print("===")
-        }
-
         if let err = batch.overallError, batch.successfulResults.isEmpty {
             let baseMessage = humanReadable(err)
-            print("=== OCR nav: OCR/parse failure — presenting error alert (error=\(err)) ===")
+            OCRLog.logger.error("OCR nav: parse failure error=\(String(describing: err), privacy: .public)")
             await persistFailure(snapshot: batch.debugSnapshot)
             presentError(baseMessage, snapshot: batch.debugSnapshot)
             return
@@ -182,19 +175,16 @@ struct AnalysisPlaceholderView: View {
         let validator = ConsistencyValidator()
         let outcome = validator.validate(results)
         navigation = NavigationPayload(refraction: refraction, results: results)
-        print("=== OCR nav: consistency result = \(outcome.result), message = \(outcome.message ?? "nil") ===")
+        OCRLog.logger.info("OCR nav: consistency=\(String(describing: outcome.result), privacy: .public)")
 
         switch outcome.result {
         case .ok:
-            print("=== OCR nav: OK — navigating to PrescriptionAnalysisView ===")
             phase = .advancing
             presentAnalysis = true
         case .warningOverridable:
-            print("=== OCR nav: warningOverridable — presenting override alert ===")
             phase = .awaitingDecision
             alertState = .overridable(message: outcome.message ?? "Readings are inconsistent. Verify before continuing.")
         case .hardBlock:
-            print("=== OCR nav: hardBlock — presenting block alert ===")
             phase = .awaitingDecision
             alertState = .hardBlock(message: outcome.message ?? "Readings cannot be reconciled. Retake the photo.")
         }

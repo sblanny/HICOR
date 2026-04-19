@@ -58,20 +58,6 @@ final class MLKitTextExtractor: TextExtracting {
             }
         }
 
-        // Verbose diagnostic logging — temporary, will remove once
-        // reconstruction is stable.
-        print("=== ML Kit Raw Structure ===")
-        print("Image size: \(image.size)")
-        print("Image orientation: \(image.imageOrientation.rawValue)")
-        print("Blocks: \(result.blocks.count)")
-        for (bi, block) in result.blocks.enumerated() {
-            print("Block \(bi): frame=\(block.frame) lines=\(block.lines.count)")
-            for (li, line) in block.lines.enumerated() {
-                print("  Line \(bi).\(li): frame=\(line.frame) text='\(line.text)'")
-            }
-        }
-        print("=== End ML Kit Raw ===")
-
         // Detect document orientation relative to the image.
         // Real-device captures of the GRK-6000 desktop printout come in as a
         // 3024×4032 portrait image even though the printout itself was
@@ -122,7 +108,7 @@ final class MLKitTextExtractor: TextExtracting {
         // back to tight clusters (~10 px spread) well inside the 60 px
         // tolerance.
         let tilt = Self.estimateTilt(entries: entries)
-        print("=== Tilt Correction === slope=\(tilt)")
+        OCRLog.logger.debug("Tilt slope: \(tilt, privacy: .public)")
         if tilt != 0 {
             entries = entries.map {
                 Entry(
@@ -161,12 +147,6 @@ final class MLKitTextExtractor: TextExtracting {
                 .map(\.text)
                 .joined(separator: "  ")
         }
-
-        print("=== Row Groups After Reconstruction ===")
-        for (i, row) in rowBased.enumerated() {
-            print("Row \(i): '\(row)'")
-        }
-        print("=== End Row Groups ===")
 
         // Temporary: column-based mirrors row-based until row reconstruction
         // is proven. Vision's columnar reconstruction is bypassed entirely
