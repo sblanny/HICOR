@@ -22,13 +22,6 @@ class AnchorDetector {
     /// anchor detection and per-cell value picking — halves the ML Kit
     /// calls and avoids re-OCR quality issues on tiny cell crops).
     func detectAnchors(from lines: [OCRLine]) throws -> Anchors {
-        #if DEBUG
-        print("AnchorDetector: \(lines.count) elements:")
-        for l in lines {
-            print("  [\(String(format: "%4.0f,%4.0f %4.0fx%4.0f", l.frame.minX, l.frame.minY, l.frame.width, l.frame.height))] \(l.text)")
-        }
-        #endif
-
         let rMarker = lines.first(where: { matchesRightMarker($0.text) })
         let lMarker = lines.first(where: { matchesLeftMarker($0.text) })
 

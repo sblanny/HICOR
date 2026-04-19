@@ -42,13 +42,16 @@ struct CellLayout {
         ]
 
         // Cell width: 1.4× the header width (numbers need more horizontal
-        // room than the 3-letter labels). Cell height: 1.2× the header
-        // height. These multipliers were chosen to cover the printed data
-        // comfortably with ~10% margin that CellROIExtractor then pads.
+        // room than the 3-letter labels). Cell height: max(1.2× header,
+        // 0.95× rowStep) so the row-containment band stays flush with the
+        // row spacing the printer actually uses — small header height on
+        // tight thermal prints otherwise makes the AVG cell miss values
+        // whose baseline drifts a few pixels up when the printer feeds the
+        // second-to-last row tighter than the 1:2:3:5 ratio predicts.
         var cells: [CellROI] = []
         for (column, header) in headers {
             let cellW = header.width * 1.4
-            let cellH = header.height * 1.2
+            let cellH = max(header.height * 1.2, rowStep * 0.95)
             for (row, midY) in rowMidYs {
                 let rect = CGRect(
                     x: header.midX - cellW / 2.0,

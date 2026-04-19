@@ -120,7 +120,7 @@ enum ReadingNormalizer {
         ]
         if reserved.contains(token.uppercased()) { return false }
 
-        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S", "A"]
+        let confusionLetters: Set<Character> = ["O", "o", "l", "I", "S", "A", "C"]
         // Comma is treated as structural so tokens like "0,75" survive the
         // numeric-candidate gate; normalizeNumericToken then substitutes it
         // back to "." Autorefractor printouts never contain legitimate commas.
@@ -146,6 +146,11 @@ enum ReadingNormalizer {
         // desktop printouts (thin-stroke glyph confusion). Only applied
         // inside tokens flagged numeric by isNumericCandidate.
         s = s.replacingOccurrences(of: "A", with: "4")
+        // Capital C → 0 substitution. Observed on dim thermal SPH cells
+        // where "0.50" is read as "C50" (leading zero loses its curve bar
+        // and becomes indistinguishable from a C). Only applied after the
+        // numeric-candidate gate has filtered non-numeric tokens.
+        s = s.replacingOccurrences(of: "C", with: "0")
         // Comma → period. ML Kit occasionally emits "0,75" instead of "0.75"
         // on thermal captures (European-locale glyph confusion).
         s = s.replacingOccurrences(of: ",", with: ".")
