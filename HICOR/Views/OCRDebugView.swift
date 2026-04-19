@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct OCRDebugView: View {
@@ -108,3 +109,4 @@ struct OCRDebugView: View {
         }
     }
 }
+#endif

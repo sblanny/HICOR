@@ -87,6 +87,7 @@ struct AnalysisPlaceholderView: View {
                     secondaryButton: .cancel(Text("Back to Photo")) { dismiss() }
                 )
             case .error(let message, let snapshot):
+                #if DEBUG
                 if snapshot != nil {
                     return Alert(
                         title: Text("Could not read printout"),
@@ -96,15 +97,17 @@ struct AnalysisPlaceholderView: View {
                         },
                         secondaryButton: .cancel(Text("Back to Photo")) { dismiss() }
                     )
-                } else {
-                    return Alert(
-                        title: Text("Could not read printout"),
-                        message: Text(message),
-                        dismissButton: .default(Text("Back to Photo")) { dismiss() }
-                    )
                 }
+                #endif
+                _ = snapshot
+                return Alert(
+                    title: Text("Could not read printout"),
+                    message: Text(message),
+                    dismissButton: .default(Text("Back to Photo")) { dismiss() }
+                )
             }
         }
+        #if DEBUG
         .sheet(isPresented: $showDebugSheet) {
             if let snapshot = debugSnapshot {
                 OCRDebugView(snapshot: snapshot) {
@@ -113,6 +116,7 @@ struct AnalysisPlaceholderView: View {
                 }
             }
         }
+        #endif
         .navigationDestination(isPresented: $presentAnalysis) {
             if let payload = navigation {
                 PrescriptionAnalysisView(
