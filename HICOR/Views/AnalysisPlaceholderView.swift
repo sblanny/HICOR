@@ -46,6 +46,7 @@ struct AnalysisPlaceholderView: View {
         let refraction: PatientRefraction
         let results: [PrintoutResult]
         let droppedOutliers: [ConsistencyValidator.DroppedReading]
+        let outcome: PrescriptionCalculationOutcome
     }
 
     var body: some View {
@@ -112,7 +113,8 @@ struct AnalysisPlaceholderView: View {
                 PrescriptionAnalysisView(
                     refraction: payload.refraction,
                     results: payload.results,
-                    droppedOutliers: payload.droppedOutliers
+                    droppedOutliers: payload.droppedOutliers,
+                    finalOutcome: payload.outcome
                 )
             } else {
                 // Defensive fallback: binding flipped to true but payload is nil.
@@ -173,10 +175,18 @@ struct AnalysisPlaceholderView: View {
 
         switch outcome {
         case .consistent(let droppedOutliers):
+            // Phase 5: compute the final prescription only on `.consistent`.
+            // `.inconsistentAddPhoto` / `.inconsistentEscalate` short-circuit to
+            // the operator alerts below — no calculator invocation on those paths.
+            let finalOutcome = PrescriptionCalculator.calculate(
+                printouts: results,
+                upstreamDroppedOutliers: droppedOutliers
+            )
             navigation = NavigationPayload(
                 refraction: refraction,
                 results: results,
-                droppedOutliers: droppedOutliers
+                droppedOutliers: droppedOutliers,
+                outcome: finalOutcome
             )
             phase = .advancing
             presentAnalysis = true

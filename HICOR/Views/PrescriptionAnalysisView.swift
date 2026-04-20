@@ -4,6 +4,7 @@ struct PrescriptionAnalysisView: View {
     let refraction: PatientRefraction
     let results: [PrintoutResult]
     var droppedOutliers: [ConsistencyValidator.DroppedReading] = []
+    let finalOutcome: PrescriptionCalculationOutcome
 
     @Environment(SyncCoordinator.self) private var sync
     @State private var saving = false
