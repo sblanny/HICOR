@@ -1,159 +1,330 @@
-# Mike Claudio's Rx Printout Reading Procedure
-## Clinical Algorithm Reference — Source of Truth for Phase 5
-
-**Author:** Mike Claudio — founder of the Highlands Church optical clinics, 10+ years of field experience
-**Date captured:** April 17, 2026
-**Use:** This document is the authoritative clinical algorithm for HICOR's prescription determination logic. Phase 5 implementation must follow this procedure.
+# MIKE_RX_PROCEDURE.md
+## Clinical Algorithm for HICOR Prescription Computation
+**Last updated:** April 20, 2026 (comprehensive Q&A with Mike)
+**Status:** Authoritative — this document is the source of truth for Phase 5 implementation
 
 ---
 
-## How to Read an Rx Printout from the Refractor
+## Purpose
 
-**Rx = Prescription**
+HICOR encodes Mike Claudio's 10 years of mission-trip clinical judgment into an algorithm a volunteer can execute reliably. Volunteers who do this 2-3 times per year cannot replicate Mike's experience-based intuition. This document specifies the rules that let the app make the call Mike would make.
 
-Reading left to right across a printout row:
-- **R** = Right Eye
-- **SPH** = Sphere — the power of the lens
-- **CYL** (Cylinder) = amount of astigmatism correction
-- **AXIS** = location of the CYL on a graph of 0 to 180 degrees (1 degree increments)
+**Scope for v1 (May 1, 2026 trip):** The app takes 2-5 photos of autorefractor printouts, performs OCR, computes a final prescription, and **displays it on screen**. The volunteer reads the displayed values and types them into FileMaker. HICOR's role ends at the display. No lens matching, no inventory tracking, no dispensing logic within HICOR.
 
 ---
 
-## Procedure (Gilras Table Top Unit — Desktop Format)
+## Notation Key
 
-### Data collection
-1. Start with right eye. You will obtain 3 results.
-2. Switch to left eye. You will obtain 3 results.
+Mike uses optician-standard centidiopter notation in his written answers:
+- `+100` = +1.00 D
+- `-300` = -3.00 D
+- `+800` = +8.00 D
 
-### Sign determination (plus vs minus)
-3. Confirm if the prescription is a **+/Plus** or **-/Minus** prescription.
-4. At least **2 out of 3 readings** will determine if + or minus.
-5. If any one of the readings is **drastically different** from the others, do not take that reading into consideration.
-
-### Sign mismatch handling
-6. If one eye is plus and the other is minus, **repeat the procedure several times**.
-7. If the readings still show one eye plus and one eye minus, **consult the Optical team leader**.
-
-### Final prescription calculation
-8. If **both eyes are minus (SPH)**, use the **calculated average on the 4th line** of readings (the AVG line).
-9. Use the available lens parameters to compare and calculate the final prescription.
-10. If **both eyes are plus (SPH)**, use the **calculated printed prescription on the 4th line** of readings.
-11. Use the available lens parameters to compare and calculate the final prescription.
-12. When determining the final readings, **remember the available SPH lens powers and the available cylinder/astigmatism limits**.
-
-### Axis
-13. **The AXIS determines the location of the CYLINDER/astigmatism.**
-
-### Inventory limits
-14. There are times you will give the highest possible parameters but must inform the patient that the prescription will not be as strong as it should be.
-15. **If the prescription printed is over +800 or -800** (i.e., outside ±6.00 diopter inventory): consider **not providing eyewear** because the top parameter of +600 or -600 will not correct vision adequately.
-16. **If the cylinder is over -300** (i.e., stronger than -2.00): consider **not providing eyewear** because the top parameter for cylinder is -200 and will not correct adequately.
+HICOR code and this document use decimal diopter values (e.g., 1.00, -3.00).
 
 ---
 
-## Key Clinical Insights Captured from Mike
+## Core Principles
 
-### 1. Outlier rejection is simpler than the research suggested
-Mike's rule: "If any one of the readings is drastically different from the others, do not take that reading into consideration."
+### 1. Two-printout minimum, five-printout maximum
+Every patient gets minimum 2 printouts from the autorefractor. Up to 5 if consistency issues arise. Cross-printout validation is the clinical safety gate — one printout alone is never sufficient for dispensing.
 
-**Translation for algorithm:** Use a simple outlier rejection — compute the median of the 3 readings, drop any reading that differs substantially from the median. No complex power-vector decomposition required for outlier detection. The clinician's mental model is "2 out of 3 agree, the 3rd is thrown out."
+### 2. Operator transparency
+HICOR never hides clinical decisions from the operator. Dropped outliers, excluded readings, and tier assignments are always surfaced on screen — never silent.
 
-### 2. The machine AVG line IS trusted — but only for same-sign cases
-Mike's rules 8 and 10 explicitly direct the operator to "go to the calculated average on the 4th line" — that's the AVG line on the desktop printout.
+### 3. When Mike and industry standards differ
+Mike's clinical thresholds take precedence (field experience beats theoretical precision). Industry standards are used for mathematical correctness (axis circularity, power-vector decomposition) where Mike approximates with mental arithmetic.
 
-**Translation for algorithm:**
-- When both eyes have same-sign SPH: **use the machine AVG line as the starting point**
-- When signs differ: the AVG line is not trusted and the operator should retake readings or escalate
-
-### 3. Sign consistency is the #1 clinical quality check
-Mike dedicates rules 3-7 entirely to sign determination. This is the most important validation.
-
-**Translation for algorithm:** The ConsistencyValidator's sign-mismatch rule is core to Mike's procedure — it's not a defensive programming check, it's a primary clinical gate.
-
-### 4. "Drastic" is the operator's judgment call
-Mike doesn't define an exact threshold for "drastically different." The current 0.50 D spread threshold in HICOR is a reasonable approximation but Mike's process is more qualitative than quantitative.
-
-**Translation for algorithm:** A strict numeric threshold may be wrong. Consider showing the operator all 3 readings and letting them override any outlier rejection the algorithm performs. The operator's judgment is preserved.
-
-### 5. Inventory limits are a hard cap
-Mike's rules 15 and 16 are clinical: if the refraction is too strong for available lenses, **don't dispense glasses**. This is a patient-safety decision, not a software limitation.
-
-**Translation for algorithm:** When SPH is outside ±6.00 or CYL is beyond -2.00, HICOR must explicitly flag "prescription exceeds available lens inventory" with guidance that the patient may not benefit from the available glasses. Do not silently clamp to nearest available.
+### 4. Refer-out is a routine outcome
+Mike estimates 10-25% of patients will be referred out. UI tone must treat this as informative, not alarming.
 
 ---
 
-## User Clarifications (April 17, 2026)
+## Algorithm Sections
 
-### On using all readings, not just the AVG line
-"We need all of the lines. The average could be flawed because some lines should be thrown out and not used. So the average line maybe should be tossed out in some cases, but in others it's really the gold standard."
+### Section 1: SPH and CYL Agreement Thresholds
 
-**Translation for algorithm:**
-- Do NOT blindly trust the machine AVG line
-- Validate raw readings first — check for consistency and outliers
-- If raw readings are consistent → trust the AVG line (it matches)
-- If outliers are detected → recompute average from non-outlier readings, ignore AVG line
-- Show operator both machine AVG and computed average if they differ
+**Two readings "agree" when:**
+- SPH values within **1.00 D** of each other (Mike's clinical threshold, matches industry repeatability)
+- CYL values within **0.50 D** of each other (industry standard for autorefractor CYL repeatability)
 
-### On desktop vs handheld usage
-"We use the desktop more than the handheld."
+**When readings disagree:**
+- 2 printouts disagreeing on SPH or CYL → require 3rd printout
+- 3 printouts still disagreeing → require 4th
+- 4 printouts with fewer than 2 agreeing → **escalate to Manual Review Required**
 
-**Translation for v1 scope:** Desktop format (GRK-6000) is the primary instrument. Handheld support is deferred to post-trip.
+### Section 2: AXIS Agreement — Sliding Scale by CYL Magnitude
+
+Axis tolerance scales inversely with cylinder power (industry practice, loosely aligned with ANSI Z80.1-2005 dispensing tolerances):
+
+| CYL magnitude | Axis agreement tolerance |
+|---------------|--------------------------|
+| 0 to -0.25 D | 30° |
+| -0.25 to -0.50 D | 20° |
+| -0.50 to -1.00 D | 15° |
+| -1.00 to -2.00 D | 10° |
+| Below -2.00 D | 7° |
+
+**For averaging axis across multiple readings:** use Thibos J0/J45 power-vector decomposition (axis is circular; simple arithmetic averaging is mathematically wrong).
+
+### Section 3: Clinical Gates Requiring Minimum 3 Readings
+
+Even when 2 printouts are internally consistent, the following situations require a minimum of 3 readings before computing a final prescription:
+
+- (a) One eye plus sign, other eye minus sign (antimetropia)
+- (b) R/L SPH difference > 3.00 D
+- (c) One eye near plano (±1.00 D) and other eye over ±5.00 D
+- (d) R or L SPH over ±10.00 D
+
+**Antimetropia is stricter:** ANY mixed-sign case requires **minimum 4 printouts** (not 3) so outliers can be discarded while preserving enough data for confident computation.
+
+### Section 4: Machine AVG Line — Trust with Validation
+
+The autorefractor prints individual readings plus an AVG line. Mike trusts the AVG by default.
+
+**HICOR rule:**
+1. Default to machine AVG as the prescription source
+2. Validate: independently compute Thibos M (spherical equivalent) from raw readings using power-vector math
+3. If |machineAVG_M − computed_M| ≤ 0.50 D → use machine AVG (Mike's preference)
+4. If disagreement > 0.50 D → outlier likely present. Apply MAD-based outlier rejection on raw readings, recompute, ignore machine AVG
+5. Mike's CYL caveat: if computed CYL > -1.00 D (more cylinder magnitude), prefer the higher (more negative) SPH reading
+
+### Section 5: Outlier Rejection and Manual Review Escalation
+
+**Need minimum 2 printouts agreeing to trust a result.**
+
+- 2 printouts agreeing → trust, proceed
+- 2 printouts disagreeing → take a 3rd
+- 3 printouts with 2 agreeing and 1 outlier → trust the 2 agreeing readings, surface the outlier on screen
+- 3 printouts all disagreeing → take a 4th
+- 4 printouts with fewer than 2 agreeing → **Manual Review Required**
+
+**Manual Review Required flow:**
+- App displays all 4 OCR readouts in a clear table on screen
+- Banner: "Manual Review Required — Consult Mike or Scott"
+- Mike or Scott examines the screen alongside the physical printouts
+- They decide the prescription manually and enter it directly into FileMaker
+- HICOR records this as a manual-review outcome
+
+### Section 6: Final Value Rounding
+
+Lenses are available in 0.25 D steps. Final computed values must be rounded to dispensable values.
+
+**SPH rounding rule (Mike, April 20):**
+- If |CYL| > 1.00 D → round SPH to **stronger correction** (more magnitude)
+  - Example: -2.37 → -2.50, +2.37 → +2.50
+- If |CYL| ≤ 1.00 D → round SPH to **weaker correction** (less magnitude)
+  - Example: -2.37 → -2.25, +2.37 → +2.25
+
+**Rationale:** When cylinder is significant, additional spherical magnitude compensates for the cylinder's effect on overall vision. When cylinder is low, under-correcting slightly is more comfortable and avoids over-correction eye strain.
+
+**CYL rounding:** round to nearest 0.25 D step (standard).
+
+**AX rounding:** round to nearest integer degree (1° precision is industry standard).
+
+### Section 7: Dispensing Tier System
+
+Five tiers determine whether and how to display the prescription:
+
+#### Tier 0 — No Glasses Needed (with symptom check)
+**Trigger:** BOTH eyes have |SPH| ≤ 0.25 AND |CYL| ≤ 0.50
+
+**Display:** Ask the patient three symptom questions:
+- "Do you have trouble seeing the board at school or work?"
+- "Do you have trouble driving at night?"
+- "Do you have any other vision problems we should know about?"
+
+**Two actions:**
+- "No symptoms — no glasses needed" → records "no glasses dispensed, no symptoms"
+- "Yes, has symptoms — show prescription" → display the prescription; operator uses judgment
+
+**Asymmetric case:** If only ONE eye qualifies for Tier 0, still dispense glasses (plano lens for the low eye). Tier 0 only triggers when BOTH eyes qualify.
+
+#### Tier 1 — Normal Range
+**Trigger:** SPH within ±6.00 D, CYL magnitude ≤ 2.00 D
+
+**Display:** Final prescription, no special banner. Proceed normally.
+
+#### Tier 2 — Stretch Range (Patient Notification Required)
+**Trigger:** SPH between ±6.00 and ±8.00 D, OR CYL magnitude between 2.00 and 3.00 D
+
+**Display:** Final prescription with banner:
+> "Patient notification required: This prescription is at the edge of our available lens range. Inform the patient their glasses may not fully correct their vision."
+
+Operator confirms "Patient has been notified" before proceeding.
+
+#### Tier 3 — Do Not Dispense (Hard Ceiling)
+**Trigger:** SPH beyond ±8.00 D, OR CYL magnitude beyond 3.00 D
+
+**Display:** Banner:
+> "Prescription exceeds dispensable range. Do not issue glasses. Refer to professional care."
+
+**No operator override.** ±8.00 D is a hard clinical ceiling per Mike (April 20).
+
+#### Tier 4 — Medical Concern
+**Trigger:** SPH beyond ±12.00 D
+
+**Display:** Banner:
+> "Medical concern: Prescription over ±12.00 D may indicate cataracts or other eye conditions requiring professional evaluation. Do not dispense. Refer to medical care."
+
+Record as a medical referral for trip documentation.
+
+### Section 8: Anisometropia (R/L Difference)
+
+**Same-sign anisometropia:**
+- |R_SPH − L_SPH| ≤ 2.00 D → dispense normally
+- |R_SPH − L_SPH| > 2.00 D → flag advisory: "Anisometropia detected. May cause depth perception issues. Patient notification required."
+- |R_SPH − L_SPH| > 3.00 D → take 3 readings, look for <3 D option, otherwise refer out
+
+**Mixed-sign anisometropia (antimetropia):**
+- Both eyes within −1.50 to +1.50 D → dispense (treat as low-power separate prescriptions)
+- Either eye outside ±1.50 D → refer out (do not dispense)
+- ANY mixed-sign case → require minimum 4 printouts
+- When dispensing mixed-sign: use the LOWEST absolute SPH value
+
+### Section 9: PD (Pupillary Distance) Aggregation
+
+**Mike's rule:**
+1. Extract PD from each printout where present
+2. If only 1 PD available → use it
+3. If multiple PD values → compute mean
+4. If max(PD) − min(PD) > 5 mm → flag: "PD readings vary significantly. Please measure manually."
+5. Display computed PD with source annotation ("averaged from 3 printouts" or "manually entered")
+
+### Section 10: SPH-Only Readings
+
+Autorefractor sometimes prints SPH without CYL/AX values (when CYL is undetectable or too low to measure).
+
+**Rule:**
+- Readings with isSphOnly == true contribute to SPH averaging
+- Their placeholder CYL=0, AX=0 do NOT contribute to CYL/AX averaging
+- If all readings for an eye are SPH-only → final prescription has CYL=0, AX=0, flag SPHOnlyReadings
 
 ---
 
-## Phase 5 input shape
+## Phase 5 Algorithm Priority Order
 
-Phase 5 consumes `[PrintoutResult]` (2–5 elements per patient). Each element carries per-eye `EyeReading` values: a list of `RawReading` rows plus the machine-printed AVG/`*` line (`machineAvgSPH/CYL/AX`, and for handheld `handheldStarConfidence*`). Aggregate all `RawReading` values across photos per eye for Thibos M/J0/J45 vector averaging with MAD outlier rejection (see `RESEARCH.md`). The machine AVG lines are additional data points with their own confidence weighting per `RESEARCH.md` Q3 — cross-checked against the computed average, not a blind replacement.
+When the ConsistencyValidator returns `.consistent`, PrescriptionCalculator processes in this order:
 
-`ConsistencyValidator` runs before Phase 5 and has already:
-- blocked any cross-eye or per-eye sign mismatch (returning `.inconsistentAddPhoto` or `.inconsistentEscalate`)
-- blocked any per-eye SPH/CYL spread > 0.75 D across the full printout set
-- stripped clear single-photo outliers when 3+ photos were captured (surfaced via `Result.consistent(droppedOutliers:)`)
-
-So Phase 5 can assume it receives a mutually consistent `[PrintoutResult]`. The `droppedOutliers` list travels alongside the results for display in `PrescriptionAnalysisView`; Phase 5 does not re-introduce those readings.
-
-## How This Maps to HICOR Phase 5 Implementation
-
-### Averaging algorithm
-- Take all 3 readings per eye
-- Determine sign by majority (2 of 3)
-- Drop the outlier (the one "drastically different" from the majority)
-- Use the remaining 2 or use the machine AVG line if signs agree AND no outliers detected
-
-### Consistency validation
-- If SPH signs differ between eyes → warn the operator (Mike's rule 6-7)
-- With multiple captures, if signs still differ → escalate to team leader (not a hard stop, an advisory)
-
-### Lens matching
-- Match calculated SPH to nearest available in ±0.25 D steps within ±6.00 range
-- Match calculated CYL to nearest of [0, -0.50, -1.00, -1.50, -2.00]
-- If required CYL exceeds -2.00 → flag patient as unsuitable for available inventory
-- If required SPH exceeds ±6.00 → flag patient as unsuitable for available inventory
-
-### UI requirement (derived from Mike)
-- Show the operator the 3 original readings AND the computed final prescription
-- Allow the operator to override any single reading being marked as "outlier"
-- Allow manual override of final prescription values with reason captured in the record
+1. **Sign determination** (with clinical gates a-d triggering minimum 3 readings)
+2. **Cross-printout aggregation** via Thibos M/J0/J45 power vectors
+3. **Machine AVG validation** (compare to computed, prefer AVG if within 0.50 D)
+4. **Outlier detection** (MAD-based + 1.00 D SPH / 0.50 D CYL / sliding-scale axis)
+5. **Final value computation** (CYL-dependent SPH rounding per Section 6)
+6. **Anisometropia check** (Section 8)
+7. **Tier assignment** (Tier 0 through Tier 4 per Section 7)
+8. **PD aggregation** (Section 9)
+9. **Clinical flags collection** for UI display
 
 ---
 
-## Handheld format addendum
+## Implementation Constants
 
-Mike's guide focuses on the 3-reading Gilras desktop format. The handheld format (8 readings per eye) is used as a secondary when the desktop can't get a clean reading. The same principles apply:
-- Majority rules for sign
-- Drop outliers
-- Machine AVG line is on the `*` row, includes a confidence number 1-9
+```swift
+// Cross-printout agreement thresholds
+static let sphAgreementThreshold: Double = 1.00   // Mike's clinical threshold
+static let cylAgreementThreshold: Double = 0.50   // Industry standard
 
-For handheld with 8 readings, the outlier rejection has more data to work with and should be more statistically robust — but the clinical gate (sign consistency, inventory limits) remains identical.
+// Axis agreement — sliding scale by CYL magnitude
+static let axisToleranceCylUnder025: Double = 30.0
+static let axisToleranceCyl025To050: Double = 20.0
+static let axisToleranceCyl050To100: Double = 15.0
+static let axisToleranceCyl100To200: Double = 10.0
+static let axisToleranceCylOver200: Double = 7.0
 
-**Note:** Handheld support is deferred to post-trip Phase 10. Do not implement handheld algorithm for v1.
+// Machine AVG validation tolerance
+static let machineAvgValidationThreshold: Double = 0.50
+
+// Anisometropia thresholds
+static let anisometropiaAdvisoryThreshold: Double = 2.00
+static let anisometropiaReferOutThreshold: Double = 3.00
+static let antimetropiaBothEyesMaxAbs: Double = 1.50
+static let antimetropiaMinimumPrintouts: Int = 4
+
+// Clinical gates requiring 3+ readings
+static let rlDiffTriggersMin3: Double = 3.00
+static let onePlanoOtherHighTrigger: Double = 5.00
+static let highSphTrigger: Double = 10.00
+
+// Tier 0 (no glasses needed) thresholds
+static let tier0SphMax: Double = 0.25
+static let tier0CylMax: Double = 0.50  // absolute value
+
+// Tier boundaries
+static let sphTier1Max: Double = 6.00        // Tier 1 upper bound
+static let sphTier2Max: Double = 8.00        // Tier 2 upper bound (HARD CEILING)
+static let sphMedicalConcernMin: Double = 12.00  // Tier 4 threshold
+static let cylTier1Max: Double = 2.00        // Tier 1 upper bound (absolute)
+static let cylTier2Max: Double = 3.00        // Tier 2 upper bound (absolute)
+
+// Rounding
+static let cylBreakpointForSphRounding: Double = 1.00  // |CYL| > 1.00 rounds up
+
+// PD aggregation
+static let pdMaxSpreadBeforeManual: Double = 5.0  // mm
+
+// Manual review escalation
+static let minReadingsAgreementForTrust: Int = 2
+static let escalationPrintoutCount: Int = 4
+```
 
 ---
 
-## Open Questions for Mike (if available before Phase 5)
+## Test Fixtures Required for Phase 5
 
-1. What is the definition of "drastically different"? A specific diopter threshold, or purely qualitative?
-2. When do you choose desktop vs handheld? First-line desktop, fallback handheld?
-3. For handheld's 8 readings, do you still use a similar 2-of-3 majority rule, or is there a different approach?
-4. What's your actual rejection rate — how often do patients have Rx outside inventory?
-5. Is there a separate procedure for patients with very different Rx between eyes (anisometropia)?
+Build test cases from these scenarios:
+
+**Sign and agreement:**
+- 2 printouts agreeing within 0.50 D → consistent, use AVG
+- 2 printouts differing by 1.50 D → require 3rd
+- 3 printouts: -2.00, -2.25, -4.50 with AVG -2.25 → trust AVG (Mike's example)
+- 4 printouts all disagreeing → Manual Review Required
+
+**Axis:**
+- CYL -0.25, axis 10° vs 35° → 25° difference, within 30° tolerance → consistent
+- CYL -1.50, axis 10° vs 22° → 12° difference, exceeds 10° tolerance → flag
+
+**Tier assignment:**
+- Both eyes SPH +0.00, CYL 0.00 → Tier 0 with symptom check
+- R SPH +0.25 CYL -0.25, L SPH -2.50 → asymmetric, dispense (plano for R)
+- SPH -5.50 → Tier 1 normal
+- SPH -7.50 → Tier 2 stretch with notification
+- SPH -9.00 → Tier 3 refer out
+- SPH -13.00 → Tier 4 medical concern
+
+**Anisometropia:**
+- R -2.00, L -4.00 → 2D same sign → normal
+- R -2.00, L -5.00 → 3D same sign → advisory
+- R +1.00, L -1.00 → antimetropia, both within ±1.50 → dispense with 4 printouts
+- R +2.00, L -1.00 → antimetropia, one outside ±1.50 → refer out
+
+**Rounding:**
+- Computed -2.37 with CYL -0.50 → CYL ≤ 1.00, round to weaker → -2.25
+- Computed -2.37 with CYL -1.50 → CYL > 1.00, round to stronger → -2.50
+- Computed +2.37 with CYL -0.50 → +2.25
+- Computed +2.37 with CYL -1.50 → +2.50
+
+**PD:**
+- PDs 62, 64, 65 → mean 63.67, rounded 64, flag: none
+- PDs 60, 64, 68 → spread 8mm → flag for manual measurement
+
+**SPH-only:**
+- All 3 readings SPH-only → final prescription CYL=0, AX=0, flag SPHOnlyReadings
+
+---
+
+## Document History
+
+- **April 17, 2026** — Initial procedure document from Mike Claudio
+- **April 19, 2026** — Mike's inventory tier clarification via text (±6/±8/±12 tiers)
+- **April 19, 2026** — Mike's detailed Q&A response (SPH threshold, axis, anisometropia, PD)
+- **April 20, 2026** — Live Q&A session finalizing:
+  - CYL agreement threshold (0.50 D per industry)
+  - Axis sliding scale (industry-leaning)
+  - Tier 0 (no-glasses) with symptom check
+  - Asymmetric Tier 0 → dispense with plano
+  - Antimetropia 4-printout rule, ±1.50 boundary, use lowest absolute
+  - ±8.00 D hard ceiling (no override)
+  - Rounding rule: CYL-dependent up/down
+  - Manual Review Required escalation path (display OCR, consult Mike/Scott)
+  - Scope clarification: HICOR ends at prescription display, FileMaker handles dispensing
