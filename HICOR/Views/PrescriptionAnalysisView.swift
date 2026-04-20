@@ -574,6 +574,15 @@ struct PrescriptionAnalysisView: View {
 
     private func save() async {
         saving = true
+        refraction.apply(
+            outcome: finalOutcome,
+            patientNotifiedTier2: finalOutcome.overallTier == .tier2StretchWithNotification
+                ? patientNotifiedTier2
+                : nil,
+            tier0Decision: finalOutcome.overallTier == .tier0NoGlassesNeeded
+                ? tier0Decision
+                : nil
+        )
         await sync.save(refraction)
         saving = false
         NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
