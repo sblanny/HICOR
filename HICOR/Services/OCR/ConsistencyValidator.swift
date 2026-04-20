@@ -8,7 +8,7 @@ struct ConsistencyValidator {
         case inconsistentEscalate(reason: String)
     }
 
-    struct DroppedReading: Equatable {
+    struct DroppedReading: Equatable, Codable {
         let reading: RawReading
         let photoIndex: Int
         let eye: Eye

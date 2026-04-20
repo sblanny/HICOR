@@ -9,6 +9,54 @@ enum Constants {
     // gate (not an OCR workaround) — non-negotiable.
     static let minPhotosRequired = 2
     static let maxPhotosAllowed = 5
+
+    // MARK: - Phase 5 (see HICOR/Documentation/MIKE_RX_PROCEDURE.md §Implementation Constants)
+
+    // Cross-printout agreement thresholds
+    static let sphAgreementThreshold: Double = 1.00   // Mike's clinical threshold (§1)
+    static let cylAgreementThreshold: Double = 0.50   // Industry standard (§1)
+
+    // Axis agreement — sliding scale by CYL magnitude (§2)
+    static let axisToleranceCylUnder025: Double = 30.0
+    static let axisToleranceCyl025To050: Double = 20.0
+    static let axisToleranceCyl050To100: Double = 15.0
+    static let axisToleranceCyl100To200: Double = 10.0
+    static let axisToleranceCylOver200: Double = 7.0
+
+    // Machine AVG validation tolerance (§4)
+    static let machineAvgValidationThreshold: Double = 0.50
+
+    // Anisometropia thresholds (§8)
+    static let anisometropiaAdvisoryThreshold: Double = 2.00
+    static let anisometropiaReferOutThreshold: Double = 3.00
+    static let antimetropiaBothEyesMaxAbs: Double = 1.50
+    static let antimetropiaMinimumPrintouts: Int = 4
+
+    // Clinical gates requiring 3+ readings (§3)
+    static let rlDiffTriggersMin3: Double = 3.00
+    static let onePlanoOtherHighTrigger: Double = 5.00
+    static let highSphTrigger: Double = 10.00
+
+    // Tier 0 (no glasses needed) thresholds (§7)
+    static let tier0SphMax: Double = 0.25
+    static let tier0CylMax: Double = 0.50
+
+    // Tier boundaries (§7)
+    static let sphTier1Max: Double = 6.00
+    static let sphTier2Max: Double = 8.00        // HARD CEILING
+    static let sphMedicalConcernMin: Double = 12.00
+    static let cylTier1Max: Double = 2.00
+    static let cylTier2Max: Double = 3.00
+
+    // Rounding (§6)
+    static let cylBreakpointForSphRounding: Double = 1.00
+
+    // PD aggregation (§9)
+    static let pdMaxSpreadBeforeManual: Double = 5.0  // mm
+
+    // Manual review escalation (§5)
+    static let minReadingsAgreementForTrust: Int = 2
+    static let escalationPrintoutCount: Int = 4
 }
 
 enum Eye: String, Codable, Equatable, CaseIterable {
