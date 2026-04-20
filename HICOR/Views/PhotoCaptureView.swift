@@ -38,7 +38,7 @@ struct PhotoCaptureView: View {
         .navigationTitle("Patient #\(patientNumber)")
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $showingCamera) {
-            CaptureView(
+            AutoDetectCaptureView(
                 onImagePicked: { image in
                     if let data = image.jpegData(compressionQuality: 0.8) {
                         state.addPhoto(data)
