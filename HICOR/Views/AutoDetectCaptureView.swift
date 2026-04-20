@@ -38,6 +38,7 @@ final class AutoDetectCaptureController: UIViewController,
 
     private let overlayView = OverlayUIView()
     private let statusLabel = UILabel()
+    private let fallbackBanner = UILabel()
     private let shutterButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
 
@@ -126,6 +127,18 @@ final class AutoDetectCaptureController: UIViewController,
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusLabel)
 
+        fallbackBanner.text = "Auto-detection unavailable — tap the shutter to capture manually."
+        fallbackBanner.textColor = .white
+        fallbackBanner.font = .systemFont(ofSize: 14, weight: .regular)
+        fallbackBanner.textAlignment = .center
+        fallbackBanner.numberOfLines = 0
+        fallbackBanner.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        fallbackBanner.layer.cornerRadius = 10
+        fallbackBanner.layer.masksToBounds = true
+        fallbackBanner.isHidden = true
+        fallbackBanner.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(fallbackBanner)
+
         let shutterConfig = UIImage.SymbolConfiguration(pointSize: 72)
         shutterButton.setImage(UIImage(systemName: "circle.inset.filled", withConfiguration: shutterConfig), for: .normal)
         shutterButton.tintColor = .white
@@ -144,6 +157,10 @@ final class AutoDetectCaptureController: UIViewController,
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             statusLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
+
+            fallbackBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            fallbackBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            fallbackBanner.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
 
             shutterButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             shutterButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -32),
@@ -194,9 +211,7 @@ final class AutoDetectCaptureController: UIViewController,
     private func updateStatusText(state: CaptureOverlayState, sinceFirstFrame: CFTimeInterval) {
         switch state {
         case .searching:
-            if !fallbackShown {
-                statusLabel.text = "Position the printout inside the frame"
-            }
+            statusLabel.text = "Position the printout inside the frame"
         case .detecting:
             statusLabel.text = "Hold still..."
         case .locked:
@@ -204,10 +219,16 @@ final class AutoDetectCaptureController: UIViewController,
         }
         if sinceFirstFrame > fallbackAfterSeconds && !fallbackShown && state == .searching {
             fallbackShown = true
-            statusLabel.text = "Auto-detection unavailable — tap the shutter to capture manually."
+            fallbackBanner.isHidden = false
             UIView.animate(withDuration: 0.25) {
                 self.shutterButton.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
             }
+        }
+        // Once a rectangle is detected after fallback surfaced, hide the banner — auto-capture
+        // takes over. The banner having appeared is a user-visible signal (not silently
+        // swallowed) per feedback_surface_automatic_exclusions.md.
+        if fallbackShown && state != .searching {
+            fallbackBanner.isHidden = true
         }
     }
 
