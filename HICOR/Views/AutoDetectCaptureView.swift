@@ -51,6 +51,8 @@ final class AutoDetectCaptureController: UIViewController,
     private let detectionIntervalSeconds: CFTimeInterval = 0.1
     private let fallbackAfterSeconds: CFTimeInterval = 10
 
+    private let haptic = UIImpactFeedbackGenerator(style: .medium)
+
     // AVCapturePhotoOutput only holds a weak reference to its delegate — keep them alive here.
     private var retainedDelegates: [AutoDetectPhotoCaptureDelegate] = []
 
@@ -203,6 +205,7 @@ final class AutoDetectCaptureController: UIViewController,
             self.updateStatusText(state: newState, sinceFirstFrame: now - self.firstFrameTime)
 
             if newState == .locked && !self.isCaptureInFlight {
+                self.playLockPulse()
                 self.triggerCapture(applyPerspectiveCorrection: true)
             }
         }
@@ -233,6 +236,8 @@ final class AutoDetectCaptureController: UIViewController,
     }
 
     private func triggerCapture(applyPerspectiveCorrection: Bool) {
+        haptic.prepare()
+        haptic.impactOccurred()
         isCaptureInFlight = true
         let settings = AVCapturePhotoSettings()
         settings.isHighResolutionPhotoEnabled = true
@@ -248,6 +253,48 @@ final class AutoDetectCaptureController: UIViewController,
         }
         retainedDelegates.append(delegate)
         photoOutput.capturePhoto(with: settings, delegate: delegate)
+        flashScreen()
+    }
+
+    private func playLockPulse() {
+        let ring = CAShapeLayer()
+        ring.frame = view.bounds
+        ring.fillColor = UIColor.clear.cgColor
+        ring.strokeColor = UIColor.systemGreen.cgColor
+        ring.lineWidth = 4
+        ring.path = UIBezierPath(ovalIn: CGRect(x: view.bounds.midX - 40,
+                                                y: view.bounds.midY - 40,
+                                                width: 80, height: 80)).cgPath
+        overlayView.layer.addSublayer(ring)
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1
+        scale.toValue = 2
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        let group = CAAnimationGroup()
+        group.animations = [scale, fade]
+        group.duration = 0.5
+        group.fillMode = .forwards
+        group.isRemovedOnCompletion = false
+        ring.add(group, forKey: "pulse")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { ring.removeFromSuperlayer() }
+    }
+
+    // Fires immediately when the shutter is invoked — this is the user-facing cue for
+    // "I'm capturing now," not a confirmation that the photo came back successfully. The
+    // async photo-processing path can still fail or be cancelled; the flash is intentionally
+    // decoupled so the UI feels responsive on the same frame as the haptic.
+    private func flashScreen() {
+        let flash = UIView(frame: view.bounds)
+        flash.backgroundColor = .white
+        flash.alpha = 0
+        view.addSubview(flash)
+        UIView.animate(withDuration: 0.08, animations: { flash.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.18, animations: { flash.alpha = 0 }) { _ in
+                flash.removeFromSuperview()
+            }
+        }
     }
 }
 
