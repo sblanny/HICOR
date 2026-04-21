@@ -41,54 +41,56 @@ struct PrescriptionAnalysisView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+        VStack(spacing: 0) {
+            SharedHeader()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    header
 
-                if finalOutcome.requiresManualReview {
-                    manualReviewSection
-                } else {
-                    tierBanner
-                    if finalOutcome.overallTier == .tier0NoGlassesNeeded {
-                        tier0SymptomSection
-                    }
-                    finalPrescriptionCard
-                    if tierPresentation.requiresPatientNotifiedAcknowledgement {
-                        tier2AcknowledgeSection
-                    }
-                }
-
-                if !finalOutcome.clinicalFlags.isEmpty {
-                    clinicalFlagsSection
-                }
-
-                if !droppedOutliers.isEmpty {
-                    upstreamOutlierBanner
-                }
-
-                if !phase5DroppedOutliers.isEmpty {
-                    phase5OutlierBanner
-                }
-
-                pdCard
-
-                DisclosureGroup("Per-photo readings") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(Array(results.enumerated()), id: \.offset) { idx, result in
-                            photoCard(index: idx, result: result)
+                    if finalOutcome.requiresManualReview {
+                        manualReviewSection
+                    } else {
+                        tierBanner
+                        if finalOutcome.overallTier == .tier0NoGlassesNeeded {
+                            tier0SymptomSection
+                        }
+                        finalPrescriptionCard
+                        if tierPresentation.requiresPatientNotifiedAcknowledgement {
+                            tier2AcknowledgeSection
                         }
                     }
-                    .padding(.top, 8)
-                }
-                .padding(.vertical, 4)
 
-                Spacer(minLength: 40)
+                    if !finalOutcome.clinicalFlags.isEmpty {
+                        clinicalFlagsSection
+                    }
+
+                    if !droppedOutliers.isEmpty {
+                        upstreamOutlierBanner
+                    }
+
+                    if !phase5DroppedOutliers.isEmpty {
+                        phase5OutlierBanner
+                    }
+
+                    pdCard
+
+                    DisclosureGroup("Per-photo readings") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(Array(results.enumerated()), id: \.offset) { idx, result in
+                                photoCard(index: idx, result: result)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    .padding(.vertical, 4)
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
         }
-        .navigationTitle("Patient #\(refraction.patientNumber)")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .safeAreaInset(edge: .bottom) {
             saveButton

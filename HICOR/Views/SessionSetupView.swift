@@ -7,51 +7,55 @@ struct SessionSetupView: View {
     @State private var navigate = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        VStack(spacing: 0) {
+            SharedHeader()
+            VStack(spacing: 24) {
+                Spacer()
 
-            CLEARLogo(size: 120)
+                CLEARLogo(size: 120)
 
-            VStack(spacing: 4) {
-                Text("CLEAR")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
-                Text("Christ's Love Expressed through Restored Sight")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-
-            Spacer()
-
-            Form {
-                Section {
-                    DatePicker("Session date", selection: $date, displayedComponents: .date)
-                        .datePickerStyle(.compact)
-                    TextField("e.g. San Quintin, Baja California", text: $location)
+                VStack(spacing: 4) {
+                    Text("CLEAR")
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                    Text("Christ's Love Expressed through Restored Sight")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
                 }
-            }
-            .scrollContentBackground(.hidden)
-            .frame(maxHeight: 200)
 
-            Button {
-                sessionContext.date = date
-                sessionContext.location = location
-                let settings = SessionSettings(lastDate: date, lastLocation: location)
-                settings.save()
-                navigate = true
-            } label: {
-                Text("Start Session")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(location.trimmingCharacters(in: .whitespaces).isEmpty)
-            .padding(.horizontal)
+                Spacer()
 
-            Spacer()
+                Form {
+                    Section {
+                        DatePicker("Session date", selection: $date, displayedComponents: .date)
+                            .datePickerStyle(.compact)
+                        TextField("e.g. San Quintin, Baja California", text: $location)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .frame(maxHeight: 200)
+
+                Button {
+                    sessionContext.date = date
+                    sessionContext.location = location
+                    let settings = SessionSettings(lastDate: date, lastLocation: location)
+                    settings.save()
+                    navigate = true
+                } label: {
+                    Text("Start Session")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(location.trimmingCharacters(in: .whitespaces).isEmpty)
+                .padding(.horizontal)
+
+                Spacer()
+            }
         }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             let settings = SessionSettings.load()
             date = settings.lastDate

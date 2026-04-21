@@ -6,6 +6,7 @@ struct PhotoCaptureView: View {
     let sessionContext: SessionContext
 
     @Environment(OCRService.self) private var ocr
+    @Environment(\.dismiss) private var dismiss
 
     @State private var state = PhotoCaptureState()
     @State private var showingCamera = false
@@ -19,28 +20,30 @@ struct PhotoCaptureView: View {
     #endif
 
     var body: some View {
-        VStack(spacing: 20) {
-            header
+        VStack(spacing: 0) {
+            SharedHeader(onBack: { dismiss() })
+            VStack(spacing: 20) {
+                header
 
-            addPhotoButton
+                addPhotoButton
 
-            Text(counterText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                Text(counterText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-            thumbnailRow
+                thumbnailRow
 
-            if state.pdManualEntryRequired {
-                pdWarningBanner
+                if state.pdManualEntryRequired {
+                    pdWarningBanner
+                }
+
+                Spacer()
+
+                analyzeButton
             }
-
-            Spacer()
-
-            analyzeButton
+            .padding()
         }
-        .padding()
-        .navigationTitle("Patient #\(patientNumber)")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(isPresented: $showingCamera) {
             ZStack {
                 AutoDetectCaptureView(
