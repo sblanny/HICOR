@@ -4,13 +4,7 @@ import SwiftData
 struct ContentView: View {
     @State private var sessionContext = SessionContext()
     @State private var rootID = UUID()
-    @State private var showSplash: Bool
-
-    private let splashSettings = SplashSettings()
-
-    init() {
-        _showSplash = State(initialValue: SplashSettings().shouldShowSplash())
-    }
+    @State private var showSplash = true
 
     var body: some View {
         ZStack {
@@ -32,7 +26,6 @@ struct ContentView: View {
 
     private func dismissSplash() {
         guard showSplash else { return }
-        splashSettings.markShown()
         withAnimation(.easeInOut(duration: 0.4)) { showSplash = false }
     }
 }
