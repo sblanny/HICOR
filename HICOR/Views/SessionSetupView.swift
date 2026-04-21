@@ -13,11 +13,13 @@ struct SessionSetupView: View {
             CLEARLogo(size: 120)
 
             VStack(spacing: 4) {
-                Text("HICOR")
+                Text("CLEAR")
                     .font(.system(size: 44, weight: .bold, design: .rounded))
-                Text("Highlands Church Optical Refraction")
+                Text("Christ's Love Expressed through Restored Sight")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
             }
 
             Spacer()
