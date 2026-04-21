@@ -4,15 +4,36 @@ import SwiftData
 struct ContentView: View {
     @State private var sessionContext = SessionContext()
     @State private var rootID = UUID()
+    @State private var showSplash: Bool
+
+    private let splashSettings = SplashSettings()
+
+    init() {
+        _showSplash = State(initialValue: SplashSettings().shouldShowSplash())
+    }
 
     var body: some View {
-        NavigationStack {
-            SessionSetupView(sessionContext: sessionContext)
+        ZStack {
+            NavigationStack {
+                SessionSetupView(sessionContext: sessionContext)
+            }
+            .id(rootID)
+            .onReceive(NotificationCenter.default.publisher(for: .hicorReturnToRoot)) { _ in
+                rootID = UUID()
+            }
+
+            if showSplash {
+                SplashScreenView(onDismiss: dismissSplash)
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
         }
-        .id(rootID)
-        .onReceive(NotificationCenter.default.publisher(for: .hicorReturnToRoot)) { _ in
-            rootID = UUID()
-        }
+    }
+
+    private func dismissSplash() {
+        guard showSplash else { return }
+        splashSettings.markShown()
+        withAnimation(.easeInOut(duration: 0.4)) { showSplash = false }
     }
 }
 
