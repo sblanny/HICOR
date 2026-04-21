@@ -12,6 +12,9 @@ struct PrescriptionAnalysisView: View {
     @State private var tier0BlurryVision: Tier0SymptomCheck.Answer = .unanswered
     @State private var tier0Headaches: Tier0SymptomCheck.Answer = .unanswered
     @State private var tier0Squinting: Tier0SymptomCheck.Answer = .unanswered
+    @State private var showHistory = false
+    @State private var showAbout = false
+    @State private var confirmDiscard = false
 
     private var tierPresentation: TierPresentation {
         TierPresentation.make(for: finalOutcome.overallTier)
@@ -42,7 +45,11 @@ struct PrescriptionAnalysisView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SharedHeader()
+            SharedHeader(
+                onShowHistory: { showHistory = true },
+                onChangeLocation: { confirmDiscard = true },
+                onShowAbout: { showAbout = true }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
@@ -94,6 +101,27 @@ struct PrescriptionAnalysisView: View {
         .navigationBarBackButtonHidden(true)
         .safeAreaInset(edge: .bottom) {
             saveButton
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                HistoryListView(
+                    location: refraction.sessionLocation,
+                    date: refraction.sessionDate
+                )
+            }
+        }
+        .alert("CLEAR Ministry", isPresented: $showAbout) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Highlands Church Optical Refraction\nVersion 1.0")
+        }
+        .alert("Discard current patient?", isPresented: $confirmDiscard) {
+            Button("Cancel", role: .cancel) {}
+            Button("Discard and Continue", role: .destructive) {
+                NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
+            }
+        } message: {
+            Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
         }
     }
 

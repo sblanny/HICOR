@@ -5,10 +5,17 @@ struct PatientEntryView: View {
     @State private var patientNumber: String = ""
     @FocusState private var focused: Bool
     @State private var navigate = false
+    @State private var showHistory = false
+    @State private var showAbout = false
+    @State private var confirmDiscard = false
 
     var body: some View {
         VStack(spacing: 0) {
-            SharedHeader()
+            SharedHeader(
+                onShowHistory: { showHistory = true },
+                onChangeLocation: { changeLocationTapped() },
+                onShowAbout: { showAbout = true }
+            )
             VStack(spacing: 24) {
                 VStack(spacing: 4) {
                     Text(sessionContext.location)
@@ -59,5 +66,33 @@ struct PatientEntryView: View {
                 sessionContext: sessionContext
             )
         }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                HistoryListView(sessionContext: sessionContext)
+            }
+        }
+        .alert("CLEAR Ministry", isPresented: $showAbout) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Highlands Church Optical Refraction\nVersion 1.0")
+        }
+        .alert("Discard current patient?", isPresented: $confirmDiscard) {
+            Button("Cancel", role: .cancel) {}
+            Button("Discard and Continue", role: .destructive) { postReturnToRoot() }
+        } message: {
+            Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
+        }
+    }
+
+    private func changeLocationTapped() {
+        if patientNumber.trimmingCharacters(in: .whitespaces).isEmpty {
+            postReturnToRoot()
+        } else {
+            confirmDiscard = true
+        }
+    }
+
+    private func postReturnToRoot() {
+        NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
     }
 }

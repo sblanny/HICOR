@@ -5,10 +5,15 @@ struct SessionSetupView: View {
     @State private var date: Date = Date()
     @State private var location: String = ""
     @State private var navigate = false
+    @State private var showHistory = false
+    @State private var showAbout = false
 
     var body: some View {
         VStack(spacing: 0) {
-            SharedHeader()
+            SharedHeader(
+                onShowHistory: { showHistory = true },
+                onShowAbout: { showAbout = true }
+            )
             VStack(spacing: 24) {
                 Spacer()
 
@@ -63,6 +68,19 @@ struct SessionSetupView: View {
         }
         .navigationDestination(isPresented: $navigate) {
             PatientEntryView(sessionContext: sessionContext)
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                HistoryListView(
+                    location: sessionContext.location.isEmpty ? location : sessionContext.location,
+                    date: sessionContext.location.isEmpty ? date : sessionContext.date
+                )
+            }
+        }
+        .alert("CLEAR Ministry", isPresented: $showAbout) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Highlands Church Optical Refraction\nVersion 1.0")
         }
     }
 }

@@ -15,13 +15,21 @@ struct PhotoCaptureView: View {
     @State private var navigateToAnalysis = false
     @State private var analyzingCapture = false
     @State private var captureRejectionMessage: String?
+    @State private var showHistory = false
+    @State private var showAbout = false
+    @State private var confirmDiscard = false
     #if DEBUG
     @State private var showingFixtureCapture = false
     #endif
 
     var body: some View {
         VStack(spacing: 0) {
-            SharedHeader(onBack: { dismiss() })
+            SharedHeader(
+                onBack: { dismiss() },
+                onShowHistory: { showHistory = true },
+                onChangeLocation: { changeLocationTapped() },
+                onShowAbout: { showAbout = true }
+            )
             VStack(spacing: 20) {
                 header
 
@@ -100,6 +108,22 @@ struct PhotoCaptureView: View {
                 pd: Double(state.pdValue) ?? 0,
                 pdManualEntry: state.pdManualEntryRequired
             )
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                HistoryListView(sessionContext: sessionContext)
+            }
+        }
+        .alert("CLEAR Ministry", isPresented: $showAbout) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Highlands Church Optical Refraction\nVersion 1.0")
+        }
+        .alert("Discard current patient?", isPresented: $confirmDiscard) {
+            Button("Cancel", role: .cancel) {}
+            Button("Discard and Continue", role: .destructive) { postReturnToRoot() }
+        } message: {
+            Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
         }
         #if DEBUG
         .safeAreaInset(edge: .bottom) {
@@ -235,6 +259,19 @@ struct PhotoCaptureView: View {
     private var analyzeButtonLabel: String {
         let count = state.photos.count
         return "Analyze \(count) Photo\(count == 1 ? "" : "s")"
+    }
+
+    private func changeLocationTapped() {
+        if state.photos.isEmpty &&
+           state.pdValue.trimmingCharacters(in: .whitespaces).isEmpty {
+            postReturnToRoot()
+        } else {
+            confirmDiscard = true
+        }
+    }
+
+    private func postReturnToRoot() {
+        NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
     }
 
     @MainActor
