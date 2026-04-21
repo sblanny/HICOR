@@ -10,7 +10,7 @@ struct SessionSetupView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            logoArea
+            CLEARLogo(size: 120)
 
             VStack(spacing: 4) {
                 Text("HICOR")
@@ -57,26 +57,6 @@ struct SessionSetupView: View {
         }
         .navigationDestination(isPresented: $navigate) {
             PatientEntryView(sessionContext: sessionContext)
-        }
-    }
-
-    private var logoArea: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.306, green: 0.769, blue: 0.663), // Highlands teal #4EC4A8
-                            Color(red: 0.510, green: 0.788, blue: 0.494)  // Highlands sage #82C97E
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 120, height: 120)
-            Image(systemName: "eye.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.white)
         }
     }
 }
