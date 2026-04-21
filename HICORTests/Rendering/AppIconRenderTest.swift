@@ -7,6 +7,7 @@ import SwiftUI
 /// To regenerate the app icon PNG, rename `disabled_testRenderAppIcon` to
 /// `testRenderAppIcon`, run just this test, then rename it back.
 final class AppIconRenderTest: XCTestCase {
+    @MainActor
     func disabled_testRenderAppIcon() throws {
         let view = CLEARLogo(size: 1024, fillCanvas: true)
             .frame(width: 1024, height: 1024)
