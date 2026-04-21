@@ -3,23 +3,26 @@ import SwiftData
 
 struct HistoryListView: View {
     let location: String
-    let date: Date
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    @State private var selectedDate: Date
     @State private var patients: [PatientRefraction] = []
+    @State private var availableDates: [Date] = []
+    @State private var patientCounts: [Date: Int] = [:]
+    @State private var showDatePicker: Bool = false
     @State private var search: String = ""
     @State private var loadError: String?
 
     init(location: String, date: Date) {
         self.location = location
-        self.date = date
+        _selectedDate = State(initialValue: date)
     }
 
     init(sessionContext: SessionContext) {
         self.location = sessionContext.location
-        self.date = sessionContext.date
+        _selectedDate = State(initialValue: sessionContext.date)
     }
 
     var body: some View {
@@ -42,22 +45,47 @@ struct HistoryListView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            load()
+            loadDateOptions()
+            loadPatients()
         }
         .navigationDestination(for: PatientRefraction.self) { refraction in
             PatientDetailView(refraction: refraction)
         }
+        .sheet(isPresented: $showDatePicker) {
+            HistoryDatePicker(
+                location: location,
+                currentDate: selectedDate,
+                availableDates: availableDates,
+                patientCounts: patientCounts,
+                onSelect: { newDate in
+                    selectedDate = newDate
+                    loadPatients()
+                }
+            )
+        }
     }
 
     private var titleBlock: some View {
-        VStack(spacing: 2) {
-            Text("History")
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-            Text("\(location)  ·  \(date.formatted(date: .abbreviated, time: .omitted))")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        Button {
+            showDatePicker = true
+        } label: {
+            VStack(spacing: 2) {
+                Text("History")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Text("\(location)  ·  \(selectedDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
     }
 
     private var searchField: some View {
@@ -104,12 +132,21 @@ struct HistoryListView: View {
             Image(systemName: "tray")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text(patients.isEmpty ? "No patients yet today" : "No matches")
+            Text(emptyMessage)
                 .font(.headline)
                 .foregroundStyle(.secondary)
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var emptyMessage: String {
+        if !patients.isEmpty {
+            return "No matches"
+        }
+        return Calendar.current.isDateInToday(selectedDate)
+            ? "No patients yet today"
+            : "No patients on this day"
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -128,14 +165,35 @@ struct HistoryListView: View {
         return patients.filter { $0.patientNumber.contains(query) }
     }
 
-    private func load() {
+    private func loadPatients() {
         let repo = PatientRefractionRepository(modelContext: modelContext)
         do {
-            patients = try repo.patientsForToday(location: location, date: date)
+            patients = try repo.patientsForToday(location: location, date: selectedDate)
             loadError = nil
         } catch {
             patients = []
             loadError = "Couldn't load history: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadDateOptions() {
+        let repo = PatientRefractionRepository(modelContext: modelContext)
+        do {
+            let dates = try repo.availableDates(forLocation: location)
+            let today = Calendar.current.startOfDay(for: Date())
+            var merged = dates
+            if !merged.contains(today) {
+                merged.insert(today, at: 0)
+            }
+            availableDates = merged
+            var counts: [Date: Int] = [:]
+            for day in merged {
+                counts[day] = try repo.patientCount(forLocation: location, date: day)
+            }
+            patientCounts = counts
+        } catch {
+            availableDates = [Calendar.current.startOfDay(for: Date())]
+            patientCounts = [:]
         }
     }
 }

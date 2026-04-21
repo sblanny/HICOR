@@ -89,4 +89,67 @@ final class PatientRefractionRepositoryTests: XCTestCase {
         let results = try repo.patientsForToday(location: "Loc", date: today)
         XCTAssertEqual(results.count, 2)
     }
+
+    // MARK: - availableDates
+
+    func testAvailableDatesReturnsDistinctDays() throws {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let midMorning = cal.date(byAdding: .hour, value: 9, to: today)!
+        let midAfternoon = cal.date(byAdding: .hour, value: 15, to: today)!
+
+        try insert(PatientRefraction(patientNumber: "001", sessionDate: midMorning, sessionLocation: "Loc"))
+        try insert(PatientRefraction(patientNumber: "002", sessionDate: midAfternoon, sessionLocation: "Loc"))
+
+        let dates = try repo.availableDates(forLocation: "Loc")
+        XCTAssertEqual(dates.count, 1)
+        XCTAssertEqual(dates.first, today)
+    }
+
+    func testAvailableDatesOrderedMostRecentFirst() throws {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        let twoDaysAgo = cal.date(byAdding: .day, value: -2, to: today)!
+
+        try insert(PatientRefraction(patientNumber: "003", sessionDate: twoDaysAgo, sessionLocation: "Loc"))
+        try insert(PatientRefraction(patientNumber: "001", sessionDate: today, sessionLocation: "Loc"))
+        try insert(PatientRefraction(patientNumber: "002", sessionDate: yesterday, sessionLocation: "Loc"))
+
+        let dates = try repo.availableDates(forLocation: "Loc")
+        XCTAssertEqual(dates, [today, yesterday, twoDaysAgo])
+    }
+
+    func testAvailableDatesFiltersByLocation() throws {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+
+        try insert(PatientRefraction(patientNumber: "001", sessionDate: today, sessionLocation: "San Quintin"))
+        try insert(PatientRefraction(patientNumber: "002", sessionDate: yesterday, sessionLocation: "Ensenada"))
+
+        let dates = try repo.availableDates(forLocation: "San Quintin")
+        XCTAssertEqual(dates, [today])
+    }
+
+    // MARK: - patientCount
+
+    func testPatientCountForLocationAndDate() throws {
+        let today = Date()
+        try insert(PatientRefraction(patientNumber: "001", sessionDate: today, sessionLocation: "Loc"))
+        try insert(PatientRefraction(patientNumber: "002", sessionDate: today, sessionLocation: "Loc"))
+        try insert(PatientRefraction(patientNumber: "003", sessionDate: today, sessionLocation: "Other"))
+
+        let count = try repo.patientCount(forLocation: "Loc", date: today)
+        XCTAssertEqual(count, 2)
+    }
+
+    func testPatientCountReturnsZeroForEmptyDay() throws {
+        let today = Date()
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        try insert(PatientRefraction(patientNumber: "001", sessionDate: today, sessionLocation: "Loc"))
+
+        let count = try repo.patientCount(forLocation: "Loc", date: yesterday)
+        XCTAssertEqual(count, 0)
+    }
 }
