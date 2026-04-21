@@ -2,6 +2,12 @@ import SwiftUI
 
 struct SharedHeader: View {
     var onBack: (() -> Void)? = nil
+    var onShowHistory: (() -> Void)? = nil
+    var onChangeLocation: (() -> Void)? = nil
+    var onShowAbout: (() -> Void)? = nil
+
+    @State private var showMenu = false
+    @State private var pendingAction: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -20,7 +26,7 @@ struct SharedHeader: View {
                 .foregroundStyle(.primary)
             Spacer()
             Button {
-                // Phase 7: History, Change Location/Date, About
+                showMenu = true
             } label: {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 20, weight: .medium))
@@ -34,6 +40,19 @@ struct SharedHeader: View {
         .background(.background)
         .overlay(alignment: .bottom) {
             Divider().opacity(0.5)
+        }
+        .sheet(isPresented: $showMenu, onDismiss: {
+            let action = pendingAction
+            pendingAction = nil
+            action?()
+        }) {
+            HamburgerMenu(
+                isPresented: $showMenu,
+                pendingAction: $pendingAction,
+                onShowHistory: onShowHistory,
+                onChangeLocation: onChangeLocation,
+                onShowAbout: onShowAbout
+            )
         }
     }
 }
