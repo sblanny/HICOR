@@ -5,15 +5,19 @@ import UIKit
 struct AutoDetectCaptureView: UIViewControllerRepresentable {
     let onImagePicked: (UIImage) -> Void
     let onCancel: () -> Void
+    var isPaused: Bool = false
 
     func makeUIViewController(context: Context) -> AutoDetectCaptureController {
         let vc = AutoDetectCaptureController()
         vc.onImagePicked = onImagePicked
         vc.onCancel = onCancel
+        vc.isPaused = isPaused
         return vc
     }
 
-    func updateUIViewController(_ uiViewController: AutoDetectCaptureController, context: Context) {}
+    func updateUIViewController(_ uiViewController: AutoDetectCaptureController, context: Context) {
+        uiViewController.isPaused = isPaused
+    }
 }
 
 final class AutoDetectCaptureController: UIViewController,
@@ -41,6 +45,8 @@ final class AutoDetectCaptureController: UIViewController,
     private let fallbackBanner = UILabel()
     private let shutterButton = UIButton(type: .system)
     private let cancelButton = UIButton(type: .system)
+
+    var isPaused: Bool = false
 
     private var latestRectangle: DetectedRectangle?
     private var isCaptureInFlight = false
@@ -173,6 +179,7 @@ final class AutoDetectCaptureController: UIViewController,
     }
 
     @objc private func manualShutterTapped() {
+        guard !isPaused else { return }
         triggerCapture(applyPerspectiveCorrection: false)
     }
 
@@ -204,7 +211,7 @@ final class AutoDetectCaptureController: UIViewController,
             self.overlayView.update(rectangle: top, state: newState)
             self.updateStatusText(state: newState, sinceFirstFrame: now - self.firstFrameTime)
 
-            if newState == .locked && !self.isCaptureInFlight {
+            if newState == .locked && !self.isCaptureInFlight && !self.isPaused {
                 self.playLockPulse()
                 self.triggerCapture(applyPerspectiveCorrection: true)
             }

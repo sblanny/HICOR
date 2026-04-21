@@ -138,6 +138,16 @@ final class OCRService {
         throw Self.errorFor(result: result) ?? .unrecognizedFormat
     }
 
+    /// Validates a single captured photo at capture time. Returns nil on any OCR failure
+    /// (unreadable image data, unrecognized format, insufficient readings). Used by the
+    /// capture flow to reject photos before they're added to PhotoCaptureState —
+    /// preserves the all-or-nothing guarantee (see project_ocr_all_or_nothing memory)
+    /// by enforcing it at capture time rather than at batch submission.
+    func runSingle(imageData: Data) async -> PrintoutResult? {
+        guard let image = UIImage(data: imageData) else { return nil }
+        return try? await processImage(image)
+    }
+
     func processImages(_ images: [UIImage]) async -> OCRBatchResult {
         var perImage: [OCRImageResult] = []
         var snapshotEntries: [OCRDebugSnapshot.Entry] = []

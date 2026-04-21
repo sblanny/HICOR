@@ -5,11 +5,15 @@ struct PhotoCaptureView: View {
     let patientNumber: String
     let sessionContext: SessionContext
 
+    @Environment(OCRService.self) private var ocr
+
     @State private var state = PhotoCaptureState()
     @State private var showingCamera = false
     @State private var fullScreenIndex: Int?
     @State private var showCommitBlockedAlert = false
     @State private var navigateToAnalysis = false
+    @State private var analyzingCapture = false
+    @State private var captureRejectionMessage: String?
     #if DEBUG
     @State private var showingFixtureCapture = false
     #endif
@@ -38,16 +42,37 @@ struct PhotoCaptureView: View {
         .navigationTitle("Patient #\(patientNumber)")
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $showingCamera) {
-            AutoDetectCaptureView(
-                onImagePicked: { image in
-                    if let data = image.jpegData(compressionQuality: 0.8) {
-                        state.addPhoto(data)
+            ZStack {
+                AutoDetectCaptureView(
+                    onImagePicked: { image in
+                        Task { await validateCapturedImage(image) }
+                    },
+                    onCancel: { showingCamera = false },
+                    isPaused: analyzingCapture
+                )
+                .ignoresSafeArea()
+
+                if analyzingCapture {
+                    Color.black.opacity(0.55).ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(.white)
+                        Text("Analyzing…")
+                            .font(.headline)
+                            .foregroundStyle(.white)
                     }
-                    showingCamera = false
-                },
-                onCancel: { showingCamera = false }
-            )
-            .ignoresSafeArea()
+                }
+            }
+            .alert("Could not read printout",
+                   isPresented: Binding(
+                    get: { captureRejectionMessage != nil },
+                    set: { if !$0 { captureRejectionMessage = nil } }
+                   )) {
+                Button("OK", role: .cancel) { captureRejectionMessage = nil }
+            } message: {
+                Text(captureRejectionMessage ?? "")
+            }
         }
         .fullScreenCover(item: Binding(
             get: { fullScreenIndex.map { IdentifiedIndex(id: $0) } },
@@ -207,6 +232,23 @@ struct PhotoCaptureView: View {
     private var analyzeButtonLabel: String {
         let count = state.photos.count
         return "Analyze \(count) Photo\(count == 1 ? "" : "s")"
+    }
+
+    @MainActor
+    private func validateCapturedImage(_ image: UIImage) async {
+        guard let data = image.jpegData(compressionQuality: 0.8) else {
+            captureRejectionMessage = "Could not process the captured photo. Please try again."
+            return
+        }
+        analyzingCapture = true
+        let result = await ocr.runSingle(imageData: data)
+        analyzingCapture = false
+        if result != nil {
+            state.addPhoto(data)
+            showingCamera = false
+        } else {
+            captureRejectionMessage = "The printout could not be read. Please reposition the page and try again."
+        }
     }
 }
 
