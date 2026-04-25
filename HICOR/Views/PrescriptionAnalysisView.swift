@@ -537,4 +537,8 @@ struct PrescriptionAnalysisView: View {
 
 extension Notification.Name {
     static let hicorReturnToRoot = Notification.Name("hicor.returnToRoot")
+    /// Posted when a downstream screen (e.g. DisagreementReviewView) wants
+    /// to return to PhotoCaptureView while preserving the capture state.
+    /// PhotoCaptureView observes and pops its navigation stack to itself.
+    static let hicorReturnToCapture = Notification.Name("hicor.returnToCapture")
 }

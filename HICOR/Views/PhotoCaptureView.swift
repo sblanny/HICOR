@@ -123,6 +123,13 @@ struct PhotoCaptureView: View {
         } message: {
             Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
         }
+        .onReceive(NotificationCenter.default.publisher(for: .hicorReturnToCapture)) { _ in
+            // Posted by DisagreementReviewView's "Capture another printout"
+            // path. Popping AnalysisPlaceholderView pops everything above
+            // it too (DisagreementReviewView), returning here with the
+            // operator's existing printouts intact.
+            navigateToAnalysis = false
+        }
         #if DEBUG
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 4) {

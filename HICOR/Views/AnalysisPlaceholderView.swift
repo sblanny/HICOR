@@ -142,7 +142,15 @@ struct AnalysisPlaceholderView: View {
                 DisagreementReviewView(
                     mode: payload.mode,
                     results: payload.results,
-                    onAddAnother: { dismiss() },
+                    onAddAnother: {
+                        // dismiss() captured here pops only the topmost
+                        // navigation destination (DisagreementReviewView),
+                        // leaving the operator stranded on this view's
+                        // spinner. Posting .hicorReturnToCapture lets
+                        // PhotoCaptureView pop its own destination binding,
+                        // which pops both views in one step.
+                        NotificationCenter.default.post(name: .hicorReturnToCapture, object: nil)
+                    },
                     onStartOver: {
                         NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
                     }
