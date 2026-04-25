@@ -284,6 +284,130 @@ final class ConsistencyValidatorTests: XCTestCase {
         }
     }
 
+    // MARK: - Plano CYL axis-check skip
+    //
+    // When CYL is 0.00 (plano), axis is clinically meaningless — the
+    // autorefractor emits a placeholder (typically 180°) that varies
+    // arbitrarily. The pairwise check must skip the axis comparison
+    // when either printout has plano CYL.
+
+    func testTwoPrintoutsBothPlanoCYL_axisIgnored() {
+        let p1 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: 0.00,
+            leftMachineAvgCYL:  0.00,
+            rightMachineAvgAX: 180,
+            leftMachineAvgAX:  180,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: 0.00,
+            leftMachineAvgCYL:  0.00,
+            rightMachineAvgAX: 90,   // 90° vs 180° — would exceed any cyl tolerance
+            leftMachineAvgAX:  90,
+            photoIndex: 1
+        )
+        assertConsistent(ConsistencyValidator().validate([p1, p2]))
+    }
+
+    func testTwoPrintoutsBothNonPlanoCYL_axisCheckedAndAccepted() {
+        let p1 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: -0.50,
+            leftMachineAvgCYL:  -0.50,
+            rightMachineAvgAX: 90,
+            leftMachineAvgAX:  90,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: -0.50,
+            leftMachineAvgCYL:  -0.50,
+            rightMachineAvgAX: 95,    // within 15° tolerance for cyl 0.50-1.00
+            leftMachineAvgAX:  95,
+            photoIndex: 1
+        )
+        assertConsistent(ConsistencyValidator().validate([p1, p2]))
+    }
+
+    func testTwoPrintoutsBothNonPlanoCYL_axisOutOfRangeFlags() {
+        let p1 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: -0.50,
+            leftMachineAvgCYL:  -0.50,
+            rightMachineAvgAX: 90,
+            leftMachineAvgAX:  90,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: -0.50,
+            leftMachineAvgCYL:  -0.50,
+            rightMachineAvgAX: 130,   // 40° diff > 15° tolerance for cyl 0.50-1.00
+            leftMachineAvgAX:  130,
+            photoIndex: 1
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2])
+        if case .inconsistentAddPhoto(let reason, _) = outcome {
+            XCTAssertTrue(reason.contains("axis"), "Reason should reference axis, got: \(reason)")
+        } else {
+            XCTFail("Expected .inconsistentAddPhoto for axis out of tolerance, got \(outcome)")
+        }
+    }
+
+    func testOnePlanoOneNonPlanoCYL_flagsOnCYLNotAxis() {
+        // 0.00 vs -0.50 cyl exceeds the 0.50 D agreement threshold.
+        // Path should fail on CYL before axis is even examined.
+        let p1 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: 0.00,
+            leftMachineAvgCYL:  0.00,
+            rightMachineAvgAX: 180,
+            leftMachineAvgAX:  180,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            rightMachineAvgCYL: -0.75,
+            leftMachineAvgCYL:  -0.75,
+            rightMachineAvgAX: 95,
+            leftMachineAvgAX:  95,
+            photoIndex: 1
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2])
+        if case .inconsistentAddPhoto(let reason, _) = outcome {
+            XCTAssertTrue(reason.contains("cylinder"), "Reason should reference cylinder, got: \(reason)")
+            XCTAssertFalse(reason.contains("axis"), "Reason must not reference axis when CYL fails first, got: \(reason)")
+        } else {
+            XCTFail("Expected .inconsistentAddPhoto on CYL diff, got \(outcome)")
+        }
+    }
+
     func testSignMismatchSkippedWhenOneEyeBlind() {
         let rRight = [RawReading(id: UUID(), sph: +1.50, cyl: -0.50, ax: 90, eye: .right, sourcePhotoIndex: 0)]
         let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: 0, machineType: .handheld)

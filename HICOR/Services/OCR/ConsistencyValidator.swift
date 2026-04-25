@@ -166,11 +166,21 @@ struct ConsistencyValidator {
         }
 
         if let aAx = a.ax, let bAx = b.ax {
-            let cylForTolerance = max(abs(a.cyl ?? 0), abs(b.cyl ?? 0))
-            let tolerance = AxisMath.toleranceForCyl(cylForTolerance)
-            let axDiff = AxisMath.circularDiff(aAx, bAx)
-            if Double(axDiff) > tolerance {
-                return "\(eyeLabel) eye AVG axis differs by \(axDiff)° between printouts (tolerance \(Int(tolerance))°)"
+            // Plano CYL has no meaningful axis — when there's no astigmatism
+            // to align, autorefractors emit a placeholder axis (typically
+            // 180°) that varies arbitrarily between printouts of the same
+            // eye. Comparing it triggers spurious disagreement banners. The
+            // CYL agreement check above already pinned both printouts to 0;
+            // skip the axis check when either side is plano.
+            let aCyl = a.cyl ?? 0
+            let bCyl = b.cyl ?? 0
+            if aCyl != 0 && bCyl != 0 {
+                let cylForTolerance = max(abs(aCyl), abs(bCyl))
+                let tolerance = AxisMath.toleranceForCyl(cylForTolerance)
+                let axDiff = AxisMath.circularDiff(aAx, bAx)
+                if Double(axDiff) > tolerance {
+                    return "\(eyeLabel) eye AVG axis differs by \(axDiff)° between printouts (tolerance \(Int(tolerance))°)"
+                }
             }
         }
 
