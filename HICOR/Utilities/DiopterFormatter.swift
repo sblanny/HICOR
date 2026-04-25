@@ -14,4 +14,11 @@ enum DiopterFormatter {
             ? String(format: "+%.2f", normalized)
             : String(format: "%.2f", normalized)
     }
+
+    /// Formats an axis value for monospaced column display. Pads the
+    /// numeric part to three characters so 1°/2° axes don't visually
+    /// shift the column relative to 3-digit axes (180°, 119°).
+    static func formatAxis(_ axis: Int) -> String {
+        String(format: "%3d°", axis)
+    }
 }

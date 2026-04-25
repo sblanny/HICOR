@@ -187,7 +187,7 @@ struct PrescriptionAnalysisView: View {
                 HStack(spacing: 16) {
                     Text(DiopterFormatter.format(rx.sph)).frame(width: 70, alignment: .leading)
                     Text(DiopterFormatter.format(rx.cyl)).frame(width: 70, alignment: .leading)
-                    Text("\(rx.ax)°").frame(width: 50, alignment: .leading)
+                    Text(DiopterFormatter.formatAxis(rx.ax)).frame(width: 50, alignment: .leading)
                 }
                 .font(.system(.title3, design: .monospaced))
             } else {
@@ -304,7 +304,7 @@ struct PrescriptionAnalysisView: View {
                         Text(row.eyeLabel).frame(width: 40, alignment: .leading)
                         Text(DiopterFormatter.format(row.sph)).frame(width: 60, alignment: .leading)
                         Text(row.isSphOnly ? "—" : DiopterFormatter.format(row.cyl)).frame(width: 60, alignment: .leading)
-                        Text(row.isSphOnly ? "—" : "\(row.ax)°").frame(width: 40, alignment: .leading)
+                        Text(row.isSphOnly ? "—" : DiopterFormatter.formatAxis(row.ax)).frame(width: 40, alignment: .leading)
                     }
                     .font(.system(.caption, design: .monospaced))
                 }

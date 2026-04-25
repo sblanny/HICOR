@@ -31,4 +31,14 @@ final class DiopterFormatterTests: XCTestCase {
         XCTAssertEqual(DiopterFormatter.format(12.25), "+12.25")
         XCTAssertEqual(DiopterFormatter.format(-12.25), "-12.25")
     }
+
+    // MARK: - Axis formatting (column-aligned display)
+
+    func testFormatAxisPadsThreeDigitsWithLeadingSpaces() {
+        XCTAssertEqual(DiopterFormatter.formatAxis(1),    "  1°")
+        XCTAssertEqual(DiopterFormatter.formatAxis(9),    "  9°")
+        XCTAssertEqual(DiopterFormatter.formatAxis(99),   " 99°")
+        XCTAssertEqual(DiopterFormatter.formatAxis(108),  "108°")
+        XCTAssertEqual(DiopterFormatter.formatAxis(180),  "180°")
+    }
 }

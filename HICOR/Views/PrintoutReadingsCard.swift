@@ -57,35 +57,67 @@ struct PrintoutReadingsCard: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.subheadline.weight(.semibold))
             ForEach(reading.readings) { r in
-                rxRow(sph: r.sph, cyl: r.cyl, ax: r.ax, lowConfidence: r.lowConfidence, isSphOnly: r.isSphOnly)
+                rxRow(
+                    rowLabel: nil,
+                    sph: r.sph,
+                    cyl: r.cyl,
+                    ax: r.ax,
+                    lowConfidence: r.lowConfidence,
+                    isSphOnly: r.isSphOnly,
+                    confidence: nil
+                )
             }
             if let avgSPH = reading.machineAvgSPH,
                let avgCYL = reading.machineAvgCYL,
                let avgAX  = reading.machineAvgAX {
-                HStack(spacing: 8) {
-                    Text(reading.machineType == .desktop ? "AVG" : "*")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.tint)
-                    rxRow(sph: avgSPH, cyl: avgCYL, ax: avgAX, lowConfidence: false, isSphOnly: false)
-                    if let conf = starConfidence {
-                        Text("conf \(conf)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                rxRow(
+                    rowLabel: reading.machineType == .desktop ? "AVG" : "*",
+                    sph: avgSPH,
+                    cyl: avgCYL,
+                    ax: avgAX,
+                    lowConfidence: false,
+                    isSphOnly: false,
+                    confidence: starConfidence
+                )
             }
         }
     }
 
-    private func rxRow(sph: Double, cyl: Double, ax: Int, lowConfidence: Bool, isSphOnly: Bool) -> some View {
+    private func rxRow(
+        rowLabel: String?,
+        sph: Double,
+        cyl: Double,
+        ax: Int,
+        lowConfidence: Bool,
+        isSphOnly: Bool,
+        confidence: Int?
+    ) -> some View {
         HStack(spacing: 12) {
+            // Fixed-width leading column reserves space for an "AVG" / "*"
+            // tag so the AVG row's SPH/CYL/AX values line up with the R1-R3
+            // rows above. Reading rows pass nil and render as empty space.
+            Group {
+                if let rowLabel {
+                    Text(rowLabel)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tint)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 36, alignment: .leading)
             Text(DiopterFormatter.format(sph)).frame(width: 60, alignment: .leading)
             Text(isSphOnly ? "—" : DiopterFormatter.format(cyl)).frame(width: 60, alignment: .leading)
-            Text(isSphOnly ? "—" : "\(ax)°").frame(width: 50, alignment: .leading)
+            Text(isSphOnly ? "—" : DiopterFormatter.formatAxis(ax)).frame(width: 50, alignment: .leading)
             if lowConfidence {
                 Text("E")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.orange)
+            }
+            if let confidence {
+                Text("conf \(confidence)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
         }
