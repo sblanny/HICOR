@@ -448,7 +448,6 @@ final class ROIPipelineExtractor: TextExtracting {
                 } else {
                     OCRLog.logger.info("ROI reOCR \(label, privacy: .public) = <nil>")
                     saveDebugImage(crop, label: "crop-\(label.replacingOccurrences(of: " ", with: "-"))")
-                    saveToPhotos(crop)
                 }
             }
         }
@@ -616,12 +615,6 @@ final class ROIPipelineExtractor: TextExtracting {
 
     private func cellLabel(_ cell: CellROI) -> String {
         "\(cell.eye.rawValue) \(cell.column.rawValue) \(cell.row.rawValue)"
-    }
-
-    private func saveToPhotos(_ image: UIImage) {
-        #if DEBUG
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        #endif
     }
 
     private func saveDebugImage(_ image: UIImage, label: String) {
