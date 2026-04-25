@@ -8,6 +8,12 @@ final class ConsistencyValidatorTests: XCTestCase {
         leftSPHs: [Double],
         rightCYLs: [Double]? = nil,
         leftCYLs: [Double]? = nil,
+        rightMachineAvgSPH: Double? = nil,
+        leftMachineAvgSPH: Double? = nil,
+        rightMachineAvgCYL: Double? = nil,
+        leftMachineAvgCYL: Double? = nil,
+        rightMachineAvgAX: Int? = nil,
+        leftMachineAvgAX: Int? = nil,
         photoIndex: Int = 0
     ) -> PrintoutResult {
         let rCyls = rightCYLs ?? Array(repeating: -0.50, count: rightSPHs.count)
@@ -18,8 +24,8 @@ final class ConsistencyValidatorTests: XCTestCase {
         let rLeft = zip(leftSPHs, lCyls).map { (sph, cyl) in
             RawReading(id: UUID(), sph: sph, cyl: cyl, ax: 90, eye: .left, sourcePhotoIndex: photoIndex)
         }
-        let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: photoIndex, machineType: .desktop)
-        let left  = EyeReading(id: UUID(), eye: .left,  readings: rLeft,  machineAvgSPH: nil, machineAvgCYL: nil, machineAvgAX: nil, sourcePhotoIndex: photoIndex, machineType: .desktop)
+        let right = EyeReading(id: UUID(), eye: .right, readings: rRight, machineAvgSPH: rightMachineAvgSPH, machineAvgCYL: rightMachineAvgCYL, machineAvgAX: rightMachineAvgAX, sourcePhotoIndex: photoIndex, machineType: .desktop)
+        let left  = EyeReading(id: UUID(), eye: .left,  readings: rLeft,  machineAvgSPH: leftMachineAvgSPH,  machineAvgCYL: leftMachineAvgCYL,  machineAvgAX: leftMachineAvgAX,  sourcePhotoIndex: photoIndex, machineType: .desktop)
         return PrintoutResult(rightEye: right, leftEye: left, pd: nil, machineType: .desktop, sourcePhotoIndex: photoIndex, rawText: "")
     }
 
@@ -59,7 +65,8 @@ final class ConsistencyValidatorTests: XCTestCase {
         let outcome = ConsistencyValidator().validate([p1, p2])
         if case .inconsistentAddPhoto(let reason, let count) = outcome {
             XCTAssertEqual(count, 2)
-            XCTAssertTrue(reason.contains("vary"), "Reason should mention variance, got: \(reason)")
+            XCTAssertTrue(reason.contains("AVG") && reason.contains("differs"),
+                          "Reason should describe AVG divergence, got: \(reason)")
         } else {
             XCTFail("Expected .inconsistentAddPhoto, got \(outcome)")
         }
@@ -155,6 +162,126 @@ final class ConsistencyValidatorTests: XCTestCase {
         let p2 = makeResult(rightSPHs: [-2.00], leftSPHs: [-2.00], photoIndex: 1)
         let outcome = ConsistencyValidator().validate([p1, p2])
         assertConsistent(outcome)
+    }
+
+    // MARK: - AVG-based agreement (MIKE_RX_PROCEDURE.md §1, §4)
+
+    func testWideRawRangeButAVGsAgree_consistent() {
+        // Real failure from device test: raw readings span 0.00 → 2.00 D
+        // (within-printout machine noise — expected and absorbed by the
+        // machine's AVG line). The two printouts' AVGs differ by only 0.75 D,
+        // which is within Mike's 1.00 D agreement threshold → consistent.
+        let p1 = makeResult(
+            rightSPHs: [0.00, 1.00, 1.50],
+            leftSPHs:  [0.00, 1.00, 1.50],
+            rightMachineAvgSPH: 0.75,
+            leftMachineAvgSPH:  0.75,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [0.75, 2.00, 2.00],
+            leftSPHs:  [0.75, 2.00, 2.00],
+            rightMachineAvgSPH: 1.50,
+            leftMachineAvgSPH:  1.50,
+            photoIndex: 1
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2])
+        if case .consistent(let dropped) = outcome {
+            XCTAssertTrue(dropped.isEmpty, "AVGs differ by 0.75 D — within threshold; expected no drops")
+        } else {
+            XCTFail("Expected .consistent, got \(outcome)")
+        }
+    }
+
+    func testRawReadingsAgreeButMachineAVGsDisagree_returnsAddPhoto() {
+        // Edge case: parsed AVG itself disagrees even though raws happen to
+        // match. Could indicate a misread AVG line — should still trigger a
+        // retake rather than be silently ignored.
+        let p1 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: 1.00,
+            leftMachineAvgSPH:  1.00,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: 3.50,
+            leftMachineAvgSPH:  3.50,
+            photoIndex: 1
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2])
+        if case .inconsistentAddPhoto(let reason, _) = outcome {
+            XCTAssertTrue(reason.contains("AVG"), "Reason should reference AVG comparison, got: \(reason)")
+        } else {
+            XCTFail("Expected .inconsistentAddPhoto, got \(outcome)")
+        }
+    }
+
+    func testAVGsDifferExactly100D_consistentAtBoundary() {
+        // Section 1: "within 1.00 D" — equality is in. Threshold uses `>` so
+        // a diff of exactly 1.00 D is accepted.
+        let p1 = makeResult(
+            rightSPHs: [-1.00],
+            leftSPHs:  [-1.00],
+            rightMachineAvgSPH: -1.00,
+            leftMachineAvgSPH:  -1.00,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.00,
+            photoIndex: 1
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2])
+        if case .consistent = outcome {
+            // expected
+        } else {
+            XCTFail("Expected .consistent at exact 1.00 D boundary, got \(outcome)")
+        }
+    }
+
+    func testThreePrintoutsOneAVGOutlier_droppedAndConsistent() {
+        // Three printouts, all left-eye AVGs: -2.00, -2.25, -4.00.
+        // The third deviates by 1.875 D from the majority's 2.125 D mean —
+        // dropped at the AVG level, surfaced as DroppedReading entries.
+        let p1 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.00,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.25],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.25,
+            photoIndex: 1
+        )
+        let p3 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-4.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -4.00,
+            photoIndex: 2
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2, p3])
+        if case .consistent(let dropped) = outcome {
+            XCTAssertEqual(dropped.count, 1, "One outlier reading from photo 2 should be dropped")
+            XCTAssertEqual(dropped.first?.photoIndex, 2)
+            XCTAssertEqual(dropped.first?.eye, .left)
+            let reason = dropped.first?.reason ?? ""
+            XCTAssertTrue(reason.contains("SPH"), "Reason should name SPH, got: \(reason)")
+            XCTAssertTrue(reason.contains("majority"), "Reason should mention majority, got: \(reason)")
+            XCTAssertTrue(reason.contains("differs"), "Reason should describe divergence, got: \(reason)")
+            XCTAssertTrue(reason.contains("D"), "Reason should include diopter unit, got: \(reason)")
+        } else {
+            XCTFail("Expected .consistent with one drop, got \(outcome)")
+        }
     }
 
     func testSignMismatchSkippedWhenOneEyeBlind() {

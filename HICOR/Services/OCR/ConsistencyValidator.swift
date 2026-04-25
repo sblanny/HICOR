@@ -15,10 +15,6 @@ struct ConsistencyValidator {
         let reason: String
     }
 
-    static let sphSpreadThreshold = 0.75
-    static let cylSpreadThreshold = 0.75
-    static let outlierDeviationThreshold = 1.00
-
     func validate(_ results: [PrintoutResult]) -> Result {
         let count = results.count
 
@@ -40,8 +36,8 @@ struct ConsistencyValidator {
             droppedOutliers = dropped
         }
 
-        if let spread = spreadWarning(results: filteredResults) {
-            return inconsistent(reason: spread, count: count)
+        if let disagreement = pairwiseAgreementCheck(results: filteredResults) {
+            return inconsistent(reason: disagreement, count: count)
         }
 
         for dropped in droppedOutliers {
@@ -52,7 +48,7 @@ struct ConsistencyValidator {
     }
 
     private func inconsistent(reason: String, count: Int) -> Result {
-        if count >= Constants.maxPhotosAllowed {
+        if count >= Constants.maxPrintoutsAllowed {
             return .inconsistentEscalate(reason: reason)
         }
         return .inconsistentAddPhoto(reason: reason, currentCount: count)
@@ -92,75 +88,169 @@ struct ConsistencyValidator {
         return nil
     }
 
-    private func spreadWarning(results: [PrintoutResult]) -> String? {
+    // Per-printout AVG signal used for cross-printout agreement. Compares
+    // each printout's representation of the eye (machine-printed AVG when
+    // present, else mean of plausible raw readings). See MIKE_RX_PROCEDURE.md
+    // §1 (SPH/CYL agreement thresholds), §2 (axis sliding scale), §4
+    // (machine AVG line).
+    private struct PerEyeAvg {
+        let photoIndex: Int
+        let sph: Double
+        let cyl: Double?
+        let ax: Int?
+    }
+
+    private func perEyeAvg(eye: Eye, in result: PrintoutResult) -> PerEyeAvg? {
+        guard let section = eye == .right ? result.rightEye : result.leftEye else { return nil }
+
+        let plausibleSphs = section.readings.map(\.sph).filter { ReadingPlausibility.isPlausibleSPH($0) }
+        let sph: Double
+        if let machineAvg = section.machineAvgSPH, ReadingPlausibility.isPlausibleSPH(machineAvg) {
+            sph = machineAvg
+        } else if !plausibleSphs.isEmpty {
+            sph = plausibleSphs.reduce(0, +) / Double(plausibleSphs.count)
+        } else {
+            return nil
+        }
+
+        let plausibleCyls = section.readings
+            .filter { !$0.isSphOnly }
+            .map(\.cyl)
+            .filter { ReadingPlausibility.isPlausibleCYL($0) }
+        let cyl: Double?
+        if let machineAvg = section.machineAvgCYL, ReadingPlausibility.isPlausibleCYL(machineAvg) {
+            cyl = machineAvg
+        } else if !plausibleCyls.isEmpty {
+            cyl = plausibleCyls.reduce(0, +) / Double(plausibleCyls.count)
+        } else {
+            cyl = nil
+        }
+
+        // Axis is circular; arithmetic mean of raw axes is mathematically
+        // wrong. Only trust the machine-printed AVG axis here. Phase 5's
+        // CrossPrintoutAggregator handles axis math via Thibos vectors.
+        let ax: Int? = section.machineAvgAX
+
+        return PerEyeAvg(photoIndex: result.sourcePhotoIndex, sph: sph, cyl: cyl, ax: ax)
+    }
+
+    private func pairwiseAgreementCheck(results: [PrintoutResult]) -> String? {
         for eye: Eye in [.right, .left] {
-            let readings = results.compactMap { result in
-                eye == .right ? result.rightEye : result.leftEye
-            }.flatMap { $0.readings }
+            let avgs = results.compactMap { perEyeAvg(eye: eye, in: $0) }
+            guard avgs.count >= 2 else { continue }
 
-            let sphReadings = readings.map(\.sph).filter { ReadingPlausibility.isPlausibleSPH($0) }
-            if sphReadings.count >= 2 {
-                let sphSpread = sphReadings.max()! - sphReadings.min()!
-                if sphSpread > ConsistencyValidator.sphSpreadThreshold {
-                    return "\(eye == .right ? "Right" : "Left") eye sphere readings vary by \(String(format: "%.2f", sphSpread)) D across printouts"
-                }
-            }
-
-            let cylReadings = readings.filter { !$0.isSphOnly }.map(\.cyl).filter { ReadingPlausibility.isPlausibleCYL($0) }
-            if cylReadings.count >= 2 {
-                let cylSpread = cylReadings.max()! - cylReadings.min()!
-                if cylSpread > ConsistencyValidator.cylSpreadThreshold {
-                    return "\(eye == .right ? "Right" : "Left") eye cylinder readings vary by \(String(format: "%.2f", cylSpread)) D across printouts"
+            for i in 0..<avgs.count {
+                for j in (i + 1)..<avgs.count {
+                    if let reason = compare(avgs[i], avgs[j], eye: eye) {
+                        return reason
+                    }
                 }
             }
         }
         return nil
     }
 
-    // When 3+ photos exist and a single photo's SPH reading clearly disagrees
-    // with the majority, drop that reading but surface it so the operator can
-    // see what was excluded (clinical principle: app makes decisions, never
-    // hides them).
+    private func compare(_ a: PerEyeAvg, _ b: PerEyeAvg, eye: Eye) -> String? {
+        let eyeLabel = eye == .right ? "Right" : "Left"
+
+        let sphDiff = abs(a.sph - b.sph)
+        if sphDiff > Constants.sphAgreementThreshold {
+            return "\(eyeLabel) eye AVG sphere differs by \(String(format: "%.2f", sphDiff)) D between printouts"
+        }
+
+        if let aCyl = a.cyl, let bCyl = b.cyl {
+            let cylDiff = abs(aCyl - bCyl)
+            if cylDiff > Constants.cylAgreementThreshold {
+                return "\(eyeLabel) eye AVG cylinder differs by \(String(format: "%.2f", cylDiff)) D between printouts"
+            }
+        }
+
+        if let aAx = a.ax, let bAx = b.ax {
+            let cylForTolerance = max(abs(a.cyl ?? 0), abs(b.cyl ?? 0))
+            let tolerance = AxisMath.toleranceForCyl(cylForTolerance)
+            let axDiff = AxisMath.circularDiff(aAx, bAx)
+            if Double(axDiff) > tolerance {
+                return "\(eyeLabel) eye AVG axis differs by \(axDiff)° between printouts (tolerance \(Int(tolerance))°)"
+            }
+        }
+
+        return nil
+    }
+
+    // When 3+ photos exist and one printout's AVG signal clearly disagrees
+    // with the majority, drop that printout's eye section but surface the
+    // dropped readings so the operator can see what was excluded (clinical
+    // principle: the app makes decisions, never hides them).
     private func removeMajorityOutliers(from results: [PrintoutResult]) -> (filtered: [PrintoutResult], dropped: [DroppedReading]) {
         var dropped: [DroppedReading] = []
         var filtered = results
 
         for eye: Eye in [.right, .left] {
-            let perPhoto: [(photoIndex: Int, avg: Double, readings: [RawReading])] = results.compactMap { result in
-                guard let section = eye == .right ? result.rightEye : result.leftEye else { return nil }
-                let plausibles = section.readings.filter { ReadingPlausibility.isPlausibleSPH($0.sph) }
-                guard !plausibles.isEmpty else { return nil }
-                let avg = plausibles.map(\.sph).reduce(0, +) / Double(plausibles.count)
-                return (result.sourcePhotoIndex, avg, plausibles)
+            let avgs: [(avg: PerEyeAvg, readings: [RawReading])] = results.compactMap { result in
+                guard let avg = perEyeAvg(eye: eye, in: result),
+                      let section = eye == .right ? result.rightEye : result.leftEye else { return nil }
+                return (avg, section.readings)
             }
-            guard perPhoto.count >= 3 else { continue }
+            guard avgs.count >= 3 else { continue }
 
-            for candidate in perPhoto {
-                let others = perPhoto.filter { $0.photoIndex != candidate.photoIndex }
-                let othersAvgs = others.map(\.avg)
-                let majorityAvg = othersAvgs.reduce(0, +) / Double(othersAvgs.count)
-                let othersSpread = (othersAvgs.max() ?? 0) - (othersAvgs.min() ?? 0)
-                let deviation = abs(candidate.avg - majorityAvg)
+            for candidate in avgs {
+                let others = avgs.filter { $0.avg.photoIndex != candidate.avg.photoIndex }
 
-                guard othersSpread <= ConsistencyValidator.sphSpreadThreshold,
-                      deviation > ConsistencyValidator.outlierDeviationThreshold else {
+                if let reason = sphOutlierReason(candidate: candidate.avg, others: others.map(\.avg)) {
+                    for reading in candidate.readings {
+                        dropped.append(DroppedReading(
+                            reading: reading,
+                            photoIndex: candidate.avg.photoIndex,
+                            eye: eye,
+                            reason: reason
+                        ))
+                    }
+                    filtered = stripEyeReadings(from: filtered, photoIndex: candidate.avg.photoIndex, eye: eye)
                     continue
                 }
 
-                for reading in candidate.readings {
-                    let reason = "SPH \(formatSigned(reading.sph)) differs from majority \(formatSigned(majorityAvg)) by \(String(format: "%.2f", abs(reading.sph - majorityAvg))) D"
-                    dropped.append(DroppedReading(
-                        reading: reading,
-                        photoIndex: candidate.photoIndex,
-                        eye: eye,
-                        reason: reason
-                    ))
+                if let reason = cylOutlierReason(candidate: candidate.avg, others: others.map(\.avg)) {
+                    for reading in candidate.readings {
+                        dropped.append(DroppedReading(
+                            reading: reading,
+                            photoIndex: candidate.avg.photoIndex,
+                            eye: eye,
+                            reason: reason
+                        ))
+                    }
+                    filtered = stripEyeReadings(from: filtered, photoIndex: candidate.avg.photoIndex, eye: eye)
                 }
-                filtered = stripEyeReadings(from: filtered, photoIndex: candidate.photoIndex, eye: eye)
             }
         }
 
         return (filtered, dropped)
+    }
+
+    private func sphOutlierReason(candidate: PerEyeAvg, others: [PerEyeAvg]) -> String? {
+        let othersSphs = others.map(\.sph)
+        guard !othersSphs.isEmpty else { return nil }
+        let majoritySph = othersSphs.reduce(0, +) / Double(othersSphs.count)
+        let othersSpread = (othersSphs.max() ?? 0) - (othersSphs.min() ?? 0)
+        let deviation = abs(candidate.sph - majoritySph)
+        guard othersSpread <= Constants.sphAgreementThreshold,
+              deviation > Constants.sphAgreementThreshold else {
+            return nil
+        }
+        return "SPH AVG \(formatSigned(candidate.sph)) differs from majority \(formatSigned(majoritySph)) by \(String(format: "%.2f", deviation)) D"
+    }
+
+    private func cylOutlierReason(candidate: PerEyeAvg, others: [PerEyeAvg]) -> String? {
+        guard let candidateCyl = candidate.cyl else { return nil }
+        let othersCyls = others.compactMap(\.cyl)
+        guard othersCyls.count >= 2 else { return nil }
+        let majorityCyl = othersCyls.reduce(0, +) / Double(othersCyls.count)
+        let othersSpread = (othersCyls.max() ?? 0) - (othersCyls.min() ?? 0)
+        let deviation = abs(candidateCyl - majorityCyl)
+        guard othersSpread <= Constants.cylAgreementThreshold,
+              deviation > Constants.cylAgreementThreshold else {
+            return nil
+        }
+        return "CYL AVG \(formatSigned(candidateCyl)) differs from majority \(formatSigned(majorityCyl)) by \(String(format: "%.2f", deviation)) D"
     }
 
     private func stripEyeReadings(from results: [PrintoutResult], photoIndex: Int, eye: Eye) -> [PrintoutResult] {
