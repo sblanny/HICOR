@@ -93,12 +93,10 @@ final class RectangleDetectorTests: XCTestCase {
     }
 
     func testAllFixturesDetectAboveThresholds() throws {
-        // Calibration evidence (2026-04-20, all 6 dim_good_framing fixtures):
-        // confidence=1.000 on every fixture; aspect range 0.579–0.992;
-        // min-dimension (derived from boundingBox + aspect) ≥0.307.
-        // Every fixture clears thresholds with margin ≥0.1; maximumAspectRatio=1.0
-        // is the framework ceiling (aspect is always ≤1.0 by definition), tightest
-        // observed value is 0.992 on fixture 1776551538.
+        // Detector uses VNDetectDocumentSegmentationRequest (neural-net document segmenter),
+        // which expresses no aspect/size knobs — only confidence is filterable. Every
+        // dim_good_framing fixture should return a segmented document whose confidence
+        // clears the minimumConfidence floor.
         let jpgs = bundle.paths(forResourcesOfType: "jpg", inDirectory: nil)
             .filter { URL(fileURLWithPath: $0).lastPathComponent.hasPrefix("dim_good_framing-case-") }
         guard !jpgs.isEmpty else { throw XCTSkip("no fixtures") }

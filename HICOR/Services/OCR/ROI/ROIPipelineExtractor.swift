@@ -1,6 +1,22 @@
 import UIKit
 
+/// Partial cell extraction result. `values` may be incomplete — the
+/// cross-photo consensus path borrows missing cells from other photos
+/// before committing to `incompleteCells`. `missing` lists cell labels
+/// still unresolved after all single-photo rescue stages.
+struct PartialCellExtraction: Equatable {
+    let values: [CellROI: String]
+    let cells: [CellROI]
+    let missing: [String]
+    let preprocessedImageData: Data?
+}
+
 final class ROIPipelineExtractor: TextExtracting {
+
+    private struct VariantAttempt {
+        let name: String
+        let partial: PartialCellExtraction
+    }
 
     typealias RectifyFn = (UIImage) async -> UIImage?
     typealias EnhanceFn = (UIImage, ImageEnhancer.Strength) -> UIImage
@@ -36,6 +52,27 @@ final class ROIPipelineExtractor: TextExtracting {
     }
 
     func extractText(from image: UIImage) async throws -> ExtractedText {
+        let partial = try await extractCellValues(from: image)
+        if !partial.missing.isEmpty {
+            throw OCRService.OCRError.incompleteCells(missing: partial.missing)
+        }
+        let rowBased = assembleRowLines(values: partial.values)
+        return ExtractedText(
+            rowBased: rowBased,
+            columnBased: rowBased,
+            preprocessedImageData: partial.preprocessedImageData,
+            boxes: [],
+            revisionUsed: 0,
+            variant: .raw
+        )
+    }
+
+    /// Extracts whatever cells this single photo can resolve, without
+    /// throwing on partial results. Throws only when anchor detection
+    /// fails outright — that means the capture isn't a GRK-6000 slip
+    /// and borrowing cells across photos can't help. Consensus callers
+    /// use the returned `values` dict to fill gaps across photos.
+    func extractCellValues(from image: UIImage) async throws -> PartialCellExtraction {
         // Rectification disabled 2026-04-18: Vision rectangle detection
         // consistently corrupts the image on the real GRK-6000 fixtures
         // (ML Kit then finds only ~3 tokens on the rectified output). The
@@ -43,64 +80,48 @@ final class ROIPipelineExtractor: TextExtracting {
         // square-to-camera; we operate on the raw capture instead.
         _ = await rectify  // retain storage ref for tests; unused in prod path
         let oriented = orientSlipToPortrait(image)
-        let enhanced = enhance(oriented, .standard)
+        OCRLog.logger.info("ROI input size=\(image.size.width, privacy: .public)x\(image.size.height, privacy: .public) orient=\(image.imageOrientation.rawValue, privacy: .public)")
 
-        // Run ML Kit once against the full enhanced image and reuse the
-        // element list for both anchor detection and per-cell value picking.
-        // Per-cell re-OCR on narrow column crops is unreliable — ML Kit
-        // needs surrounding context and often yields nothing on a crop it
-        // reads cleanly at full size.
-        let lines: [OCRLine]
-        do {
-            lines = try await lineRecognizer.recognize(enhanced)
-        } catch {
-            return try await fallbackOrThrow(image)
-        }
+        let variants: [(name: String, image: UIImage)] = [
+            ("standard", enhance(oriented, .standard)),
+            ("raw", oriented),
+            ("aggressive", enhance(oriented, .aggressive))
+        ]
 
-        let anchors: Anchors
-        do {
-            anchors = try anchorDetector.detectAnchors(from: lines)
-        } catch {
-            return try await fallbackOrThrow(image)
-        }
+        var bestAttempt: VariantAttempt?
+        var variantErrors: [String] = []
 
-        let cells = layout.cells(given: anchors)
-        let splitLines = splitMergedDecimalLines(lines)
-        let (pickedValues, unresolved) = pickCellValues(cells: cells, lines: splitLines)
-
-        var values = pickedValues
-        // For any cell the full-image pass could not populate, fall back to
-        // cropping that cell and re-running ML Kit with aggressive
-        // enhancement. Covers cases where a value token was fused with an
-        // adjacent one at full size (e.g. "-1.00172" = CYL + AX merged).
-        if !unresolved.isEmpty {
-            let crops = CellROIExtractor.crop(image: enhanced, cells: unresolved, paddingFraction: paddingFraction)
-            for (cell, crop) in crops {
-                if let value = await cellOCR.read(cell: cell, image: crop) {
-                    let normalized = ReadingNormalizer.normalizeNumericToken(value)
-                    values[cell] = reshape(normalized, for: cell.column)
+        for variant in variants {
+            do {
+                let partial = try await extractCellValues(fromVariantImage: variant.image, rawImage: oriented, variantName: variant.name)
+                let attempt = VariantAttempt(name: variant.name, partial: partial)
+                if shouldPrefer(attempt, over: bestAttempt) {
+                    bestAttempt = attempt
                 }
+            } catch {
+                let message = "\(variant.name): \(String(describing: error))"
+                OCRLog.logger.error("ROI variant failed \(message, privacy: .public)")
+                variantErrors.append(message)
             }
         }
 
-        // Apply column-specific sign conventions to the full value map
-        // (pick + re-OCR results combined) so CYL/SPH signs are consistent
-        // regardless of how a cell was populated.
-        values = applySignConventions(to: values, cells: cells, lines: lines)
-
-        let missing = cells.filter { values[$0] == nil }.map(cellLabel)
-        if !missing.isEmpty {
-            throw OCRService.OCRError.incompleteCells(missing: missing)
+        if bestAttempt == nil || bestAttempt?.partial.missing.isEmpty == false {
+            if let fallbackPartial = try await fallbackPartial(from: image),
+               shouldPreferFallback(fallbackPartial, over: bestAttempt?.partial) {
+                OCRLog.logger.info("ROI selected fallback parser result resolved=\(fallbackPartial.values.count, privacy: .public) missing=\(fallbackPartial.missing.count, privacy: .public)")
+                return fallbackPartial
+            }
         }
 
-        let rowBased = assembleRowLines(values: values)
-        return ExtractedText(
-            rowBased: rowBased,
-            columnBased: rowBased,
-            preprocessedImageData: enhanced.jpegData(compressionQuality: 0.85),
-            boxes: [],
-            revisionUsed: 0,
-            variant: .raw
+        if let bestAttempt {
+            OCRLog.logger.info("ROI selected variant \(bestAttempt.name, privacy: .public) resolved=\(bestAttempt.partial.values.count, privacy: .public) missing=\(bestAttempt.partial.missing.count, privacy: .public)")
+            return bestAttempt.partial
+        }
+
+        throw OCRService.OCRError.incompleteCells(
+            missing: variantErrors.isEmpty
+                ? ["anchor detection failed - recapture required"]
+                : ["anchor detection failed - recapture required", variantErrors.joined(separator: "; ")]
         )
     }
 
@@ -208,10 +229,11 @@ final class ROIPipelineExtractor: TextExtracting {
                 break
             }
         }
+        let directEvidence = out
         for cell in cells where cell.column == .sph && out[cell] != nil {
             let v = out[cell]!
             if v.hasPrefix("+") || v.hasPrefix("-") { continue }
-            if let sign = sectionSPHSign(for: cell, resolved: out) {
+            if let sign = sectionSPHSign(for: cell, resolved: directEvidence) {
                 out[cell] = sign + v
             }
         }
@@ -347,14 +369,15 @@ final class ROIPipelineExtractor: TextExtracting {
     /// values in the same eye section — a patient's sphere readings
     /// across r1/r2/r3/avg are almost always same-signed.
     private func sectionSPHSign(for cell: CellROI, resolved: [CellROI: String]) -> String? {
-        var positives = 0
-        var negatives = 0
+        var signedPeers: [String] = []
         for (other, value) in resolved where other.eye == cell.eye && other.column == .sph && other != cell {
-            if value.hasPrefix("+") { positives += 1 }
-            else if value.hasPrefix("-") { negatives += 1 }
+            if value.hasPrefix("+") || value.hasPrefix("-") {
+                signedPeers.append(String(value.first!))
+            }
         }
-        if negatives > positives { return "-" }
-        if positives > negatives { return "+" }
+        guard signedPeers.count >= 2 else { return nil }
+        if signedPeers.allSatisfy({ $0 == "+" }) { return "+" }
+        if signedPeers.allSatisfy({ $0 == "-" }) { return "-" }
         return nil
     }
 
@@ -374,17 +397,206 @@ final class ROIPipelineExtractor: TextExtracting {
     // a single re-OCR crop, while this one gates element picking against
     // the full-image line list where whole-number angles (AX) coexist with
     // decimal sphere/cyl values.
+    //
+    // Dotless 3-4 digit forms are accepted ("125" → "1.25", "1225" →
+    // "12.25") because ML Kit occasionally drops the decimal point on
+    // dim thermal prints. 2-digit dotless values are REJECTED: in the
+    // real captures we've seen, a bare "50" or "15" in a SPH/CYL cell
+    // is almost always a truncated fragment of "2.50" or "1.25" that
+    // reshape would silently flip into "0.50" / "0.15" — an OCR-wrong
+    // value masquerading as a plausible low-power reading. Rejecting it
+    // hands the cell to the rescue passes / consensus from other photos.
     private static let decimalRegex: NSRegularExpression = {
-        try! NSRegularExpression(pattern: #"^[-+]?(?:\d{1,2}\.\d{2}|\d{2,4})$"#)
+        try! NSRegularExpression(pattern: #"^[-+]?(?:\d{1,2}\.\d{2}|\d{3,4})$"#)
     }()
 
-    private func fallbackOrThrow(_ image: UIImage) async throws -> ExtractedText {
-        _ = try await fallback.extractText(from: image)
-        // Anchor-detection failure on a thermal GRK-6000 slip means the
-        // capture is unusable — trying to reconstruct readings from the
-        // fallback extractor's row-based text is unreliable on this layout.
-        // Throw incompleteCells so the UI prompts the user to recapture.
-        throw OCRService.OCRError.incompleteCells(missing: ["anchor detection failed — recapture required"])
+    private func extractCellValues(
+        fromVariantImage variantImage: UIImage,
+        rawImage: UIImage,
+        variantName: String
+    ) async throws -> PartialCellExtraction {
+        saveDebugImage(variantImage, label: variantName)
+
+        let lines = try await lineRecognizer.recognize(variantImage)
+        OCRLog.logger.info("ROI variant=\(variantName, privacy: .public) lines recognized: \(lines.count, privacy: .public)")
+        for (i, line) in lines.enumerated() {
+            OCRLog.logger.info("ROI \(variantName, privacy: .public) line[\(i, privacy: .public)] \"\(line.text, privacy: .public)\" x=\(Int(line.frame.midX), privacy: .public) y=\(Int(line.frame.midY), privacy: .public) w=\(Int(line.frame.width), privacy: .public) h=\(Int(line.frame.height), privacy: .public)")
+        }
+
+        let anchors = try anchorDetector.detectAnchors(from: lines)
+        let cells = layout.cells(given: anchors)
+        for cell in cells {
+            OCRLog.logger.info("ROI cell \(self.cellLabel(cell), privacy: .public) rect=\(Int(cell.rect.minX), privacy: .public),\(Int(cell.rect.minY), privacy: .public) \(Int(cell.rect.width), privacy: .public)x\(Int(cell.rect.height), privacy: .public)")
+        }
+
+        let splitLines = splitMergedDecimalLines(lines)
+        let (pickedValues, unresolved) = pickCellValues(cells: cells, lines: splitLines)
+        for cell in cells {
+            let v = pickedValues[cell] ?? "<nil>"
+            OCRLog.logger.info("ROI pick \(self.cellLabel(cell), privacy: .public) = \(v, privacy: .public)")
+        }
+
+        var values = pickedValues
+        if !unresolved.isEmpty {
+            let crops = CellROIExtractor.crop(image: variantImage, cells: unresolved, paddingFraction: paddingFraction)
+            for (cell, crop) in crops {
+                let label = self.cellLabel(cell)
+                if let value = await cellOCR.read(cell: cell, image: crop) {
+                    let normalized = ReadingNormalizer.normalizeNumericToken(value)
+                    values[cell] = reshape(normalized, for: cell.column)
+                    OCRLog.logger.info("ROI reOCR \(label, privacy: .public) raw=\(value, privacy: .public) norm=\(values[cell] ?? "<nil>", privacy: .public)")
+                } else {
+                    OCRLog.logger.info("ROI reOCR \(label, privacy: .public) = <nil>")
+                    saveDebugImage(crop, label: "crop-\(label.replacingOccurrences(of: " ", with: "-"))")
+                    saveToPhotos(crop)
+                }
+            }
+        }
+
+        let stillMissing = cells.filter { values[$0] == nil }
+        if !stillMissing.isEmpty {
+            OCRLog.logger.info("ROI Vision full-image rescue for cells: \(stillMissing.map(self.cellLabel).joined(separator: ", "), privacy: .public)")
+            if let visionLines = try? await VisionLineRecognizer().recognize(variantImage) {
+                OCRLog.logger.info("ROI Vision full-image produced \(visionLines.count, privacy: .public) lines")
+                for (i, line) in visionLines.enumerated() {
+                    OCRLog.logger.info("ROI Vision line[\(i, privacy: .public)] \"\(line.text, privacy: .public)\" x=\(Int(line.frame.midX), privacy: .public) y=\(Int(line.frame.midY), privacy: .public)")
+                }
+                let splitVision = splitMergedDecimalLines(visionLines)
+                let (visionPicked, _) = pickCellValues(cells: stillMissing, lines: splitVision)
+                for (cell, value) in visionPicked {
+                    values[cell] = value
+                    OCRLog.logger.info("ROI Vision rescue \(self.cellLabel(cell), privacy: .public) = \(value, privacy: .public)")
+                }
+            }
+        }
+
+        let stillMissingAfterVision = cells.filter { values[$0] == nil }
+        if !stillMissingAfterVision.isEmpty && variantName != "raw" {
+            OCRLog.logger.info("ROI raw-image rescue for cells: \(stillMissingAfterVision.map(self.cellLabel).joined(separator: ", "), privacy: .public)")
+            saveDebugImage(rawImage, label: "raw")
+            if let rawLines = try? await VisionLineRecognizer().recognize(rawImage) {
+                OCRLog.logger.info("ROI raw Vision produced \(rawLines.count, privacy: .public) lines")
+                for (i, line) in rawLines.enumerated() {
+                    OCRLog.logger.info("ROI raw line[\(i, privacy: .public)] \"\(line.text, privacy: .public)\" x=\(Int(line.frame.midX), privacy: .public) y=\(Int(line.frame.midY), privacy: .public)")
+                }
+                let splitRaw = splitMergedDecimalLines(rawLines)
+                let (rawPicked, _) = pickCellValues(cells: stillMissingAfterVision, lines: splitRaw)
+                for (cell, value) in rawPicked {
+                    values[cell] = value
+                    OCRLog.logger.info("ROI raw rescue \(self.cellLabel(cell), privacy: .public) = \(value, privacy: .public)")
+                }
+            }
+        }
+
+        values = applySignConventions(to: values, cells: cells, lines: lines)
+        let missing = cells.filter { values[$0] == nil }.map(cellLabel)
+        return PartialCellExtraction(
+            values: values,
+            cells: cells,
+            missing: missing,
+            preprocessedImageData: variantImage.jpegData(compressionQuality: 0.85)
+        )
+    }
+
+    private func fallbackPartial(from image: UIImage) async throws -> PartialCellExtraction? {
+        let extracted = try await fallback.extractText(from: image)
+        let candidates = [extracted.rowBased, extracted.columnBased].filter { !$0.isEmpty }
+        guard !candidates.isEmpty else { return nil }
+
+        let bestParsed = candidates
+            .compactMap { lines -> (PrintoutResult, [String])? in
+                guard let parsed = try? PrintoutParser.parse(lines: lines, photoIndex: 0) else { return nil }
+                return (parsed, lines)
+            }
+            .max { lhs, rhs in
+                OCRService.readingCount(lhs.0) < OCRService.readingCount(rhs.0)
+            }
+
+        guard let (parsed, _) = bestParsed else { return nil }
+        let partial = partialFromFallbackParse(parsed)
+        OCRLog.logger.info("ROI fallback parse resolved=\(partial.values.count, privacy: .public) missing=\(partial.missing.count, privacy: .public)")
+        return partial
+    }
+
+    private func partialFromFallbackParse(_ printout: PrintoutResult) -> PartialCellExtraction {
+        let cells = fallbackCatalog()
+        var values: [CellROI: String] = [:]
+        populateFallbackValues(from: printout.rightEye, eye: .right, into: &values)
+        populateFallbackValues(from: printout.leftEye, eye: .left, into: &values)
+        let missing = cells.filter { values[$0] == nil }.map(cellLabel)
+        return PartialCellExtraction(
+            values: values,
+            cells: cells,
+            missing: missing,
+            preprocessedImageData: nil
+        )
+    }
+
+    private func populateFallbackValues(
+        from eyeReading: EyeReading?,
+        eye: CellROI.Eye,
+        into values: inout [CellROI: String]
+    ) {
+        guard let eyeReading else { return }
+        let rows: [CellROI.Row] = [.r1, .r2, .r3]
+        for (index, row) in rows.enumerated() {
+            guard eyeReading.readings.indices.contains(index) else { continue }
+            let reading = eyeReading.readings[index]
+            values[CellROI(eye: eye, column: .sph, row: row, rect: .zero)] = formatDiopter(reading.sph)
+            if !reading.isSphOnly {
+                values[CellROI(eye: eye, column: .cyl, row: row, rect: .zero)] = formatDiopter(reading.cyl)
+                values[CellROI(eye: eye, column: .ax, row: row, rect: .zero)] = String(reading.ax)
+            }
+        }
+
+        if let avgSPH = eyeReading.machineAvgSPH {
+            values[CellROI(eye: eye, column: .sph, row: .avg, rect: .zero)] = formatDiopter(avgSPH)
+        }
+        if let avgCYL = eyeReading.machineAvgCYL {
+            values[CellROI(eye: eye, column: .cyl, row: .avg, rect: .zero)] = formatDiopter(avgCYL)
+        }
+        if let avgAX = eyeReading.machineAvgAX {
+            values[CellROI(eye: eye, column: .ax, row: .avg, rect: .zero)] = String(avgAX)
+        }
+    }
+
+    private func fallbackCatalog() -> [CellROI] {
+        var cells: [CellROI] = []
+        for eye in [CellROI.Eye.right, .left] {
+            for column in [CellROI.Column.sph, .cyl, .ax] {
+                for row in [CellROI.Row.r1, .r2, .r3, .avg] {
+                    cells.append(CellROI(eye: eye, column: column, row: row, rect: .zero))
+                }
+            }
+        }
+        return cells
+    }
+
+    private func formatDiopter(_ value: Double) -> String {
+        let prefix = value > 0 ? "+" : ""
+        return prefix + String(format: "%.2f", value)
+    }
+
+    private func shouldPrefer(_ candidate: VariantAttempt, over current: VariantAttempt?) -> Bool {
+        guard let current else { return true }
+        if candidate.partial.values.count != current.partial.values.count {
+            return candidate.partial.values.count > current.partial.values.count
+        }
+        if candidate.partial.missing.count != current.partial.missing.count {
+            return candidate.partial.missing.count < current.partial.missing.count
+        }
+        return candidate.name == "standard" && current.name != "standard"
+    }
+
+    private func shouldPreferFallback(_ fallback: PartialCellExtraction, over current: PartialCellExtraction?) -> Bool {
+        guard let current else { return true }
+        if fallback.values.count != current.values.count {
+            return fallback.values.count > current.values.count
+        }
+        if fallback.missing.count != current.missing.count {
+            return fallback.missing.count < current.missing.count
+        }
+        return false
     }
 
     private func assembleRowLines(values: [CellROI: String]) -> [String] {
@@ -404,6 +616,29 @@ final class ROIPipelineExtractor: TextExtracting {
 
     private func cellLabel(_ cell: CellROI) -> String {
         "\(cell.eye.rawValue) \(cell.column.rawValue) \(cell.row.rawValue)"
+    }
+
+    private func saveToPhotos(_ image: UIImage) {
+        #if DEBUG
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        #endif
+    }
+
+    private func saveDebugImage(_ image: UIImage, label: String) {
+        #if DEBUG
+        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let dir = docs.appendingPathComponent("ROIDebug", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let ts = Int(Date().timeIntervalSince1970)
+        let url = dir.appendingPathComponent("roi-\(label)-\(ts).jpg")
+        do {
+            try data.write(to: url)
+            OCRLog.logger.info("ROI debug image saved: \(url.path, privacy: .public)")
+        } catch {
+            OCRLog.logger.error("ROI debug image save failed: \(String(describing: error), privacy: .public)")
+        }
+        #endif
     }
 
     /// Bakes any EXIF orientation into the bitmap so downstream stages work

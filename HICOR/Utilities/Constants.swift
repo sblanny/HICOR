@@ -5,10 +5,11 @@ enum Constants {
     static let bundleID = "com.creativearchives.hicor"
     static let cloudKitContainerID = "iCloud.com.creativearchives.hicor"
     // Clinical requirement per MIKE_RX_PROCEDURE.md: 2-5 autorefractor printouts
-    // per patient. Cross-printout consistency validation is a clinical safety
-    // gate (not an OCR workaround) — non-negotiable.
-    static let minPhotosRequired = 2
-    static let maxPhotosAllowed = 5
+    // per patient. Operators may take multiple photos of the same printout so
+    // OCR consensus can recover faint or clipped values.
+    static let minPrintoutsRequired = 2
+    static let maxPrintoutsAllowed = 5
+    static let maxPhotosPerPrintout = 4
 
     // MARK: - Phase 5 (see HICOR/Documentation/MIKE_RX_PROCEDURE.md §Implementation Constants)
 

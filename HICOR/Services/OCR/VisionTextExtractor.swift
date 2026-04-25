@@ -63,11 +63,22 @@ struct ExtractedText: Equatable {
 protocol TextExtracting {
     func extractText(from image: UIImage) async throws -> ExtractedText
     func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText
+    /// Extracts whatever cells this single photo can resolve, without
+    /// throwing on partial results. The consensus path uses the returned
+    /// values dict to fill gaps across photos before deciding the capture
+    /// set is incomplete. Extractors that don't model cells (Vision/MLKit
+    /// row-based) get a default implementation that throws — the consensus
+    /// path is only valid with the ROI extractor.
+    func extractCellValues(from image: UIImage) async throws -> PartialCellExtraction
 }
 
 extension TextExtracting {
     func extractText(from image: UIImage, variant: PreprocessingVariant, revision: Int) async throws -> ExtractedText {
         try await extractText(from: image)
+    }
+
+    func extractCellValues(from image: UIImage) async throws -> PartialCellExtraction {
+        throw OCRService.OCRError.unrecognizedFormat
     }
 }
 

@@ -15,9 +15,11 @@ final class ConstantsTests: XCTestCase {
     }
 
     func testPhotoBoundsConstants() {
-        // Clinical requirement per MIKE_RX_PROCEDURE.md: 2–5 printouts per patient.
-        XCTAssertEqual(Constants.minPhotosRequired, 2)
-        XCTAssertEqual(Constants.maxPhotosAllowed, 5)
+        // Clinical requirement per MIKE_RX_PROCEDURE.md: 2–5 printouts per patient,
+        // with multiple rescue photos allowed per printout.
+        XCTAssertEqual(Constants.minPrintoutsRequired, 2)
+        XCTAssertEqual(Constants.maxPrintoutsAllowed, 5)
+        XCTAssertEqual(Constants.maxPhotosPerPrintout, 4)
         XCTAssertEqual(Constants.cloudKitContainerID, "iCloud.com.creativearchives.hicor")
     }
 }

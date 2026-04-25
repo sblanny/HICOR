@@ -3,28 +3,39 @@ import UIKit
 class CellOCR {
 
     private let recognizer: LineRecognizing
+    private let secondary: LineRecognizing?
     private let enhance: (UIImage, ImageEnhancer.Strength) -> UIImage
 
     init(
         recognizer: LineRecognizing,
+        secondary: LineRecognizing? = VisionLineRecognizer(),
         enhance: @escaping (UIImage, ImageEnhancer.Strength) -> UIImage = ImageEnhancer.enhance
     ) {
         self.recognizer = recognizer
+        self.secondary = secondary
         self.enhance = enhance
     }
 
-    /// Reads one cell. Runs ML Kit on the crop; if no line passes the
-    /// column-appropriate shape check, re-runs on an aggressively enhanced
-    /// copy of the crop. Returns the first passing value, or nil after the
-    /// single retry also fails.
+    /// Reads one cell. Chain: primary (ML Kit) on crop → primary on
+    /// aggressively-enhanced crop → secondary (Apple Vision) on crop →
+    /// secondary on aggressively-enhanced crop. ML Kit and Vision have
+    /// complementary failure modes on dim thermal prints: values one model
+    /// drops (e.g. faint 2-digit AX tokens) often pass cleanly through the
+    /// other. Returns the first engine-stage that produces a shape-valid
+    /// value, or nil if all four fail.
     func read(cell: CellROI, image: UIImage) async -> String? {
-        if let value = await attempt(cell: cell, image: image) { return value }
+        if let value = await attempt(cell: cell, image: image, using: recognizer) { return value }
         let harder = enhance(image, .aggressive)
-        return await attempt(cell: cell, image: harder)
+        if let value = await attempt(cell: cell, image: harder, using: recognizer) { return value }
+        if let secondary {
+            if let value = await attempt(cell: cell, image: image, using: secondary) { return value }
+            if let value = await attempt(cell: cell, image: harder, using: secondary) { return value }
+        }
+        return nil
     }
 
-    private func attempt(cell: CellROI, image: UIImage) async -> String? {
-        guard let lines = try? await recognizer.recognize(image) else { return nil }
+    private func attempt(cell: CellROI, image: UIImage, using engine: LineRecognizing) async -> String? {
+        guard let lines = try? await engine.recognize(image) else { return nil }
         for line in lines {
             let candidate = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if matchesShape(candidate, for: cell.column) {
@@ -48,11 +59,13 @@ class CellOCR {
     }
 
     private static let decimalRegex: NSRegularExpression = {
-        // Accept "-1.25" / "0.50" (with dot) OR dotless "-125" / "050" / "125".
-        // ML Kit routinely drops the decimal point on dim thermal prints; the
-        // downstream ReadingNormalizer reinserts it. 2-4 digit dotless forms
-        // cover values from 0.00 (-000-) to 9.75 (975) and occasional "1225"
-        // for 12.25 on high-sphere patients.
-        try! NSRegularExpression(pattern: #"^[-+]?(?:\d{1,2}\.\d{2}|\d{2,4})$"#)
+        // Accept "-1.25" / "0.50" (with dot) OR dotless 3-4 digit forms
+        // (-125- / 050 / 1225). ML Kit routinely drops the decimal point
+        // on dim thermal prints; the downstream ReadingNormalizer
+        // reinserts it. 2-digit dotless values are REJECTED: they are
+        // almost always truncated fragments of the real reading (e.g.
+        // "50" from "2.50") that reshape would silently flip into "0.50"
+        // — see ROIPipelineExtractor.decimalRegex for the full rationale.
+        try! NSRegularExpression(pattern: #"^[-+]?(?:\d{1,2}\.\d{2}|\d{3,4})$"#)
     }()
 }

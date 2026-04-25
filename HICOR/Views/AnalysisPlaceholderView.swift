@@ -4,9 +4,16 @@ import UIKit
 struct AnalysisPlaceholderView: View {
     let patientNumber: String
     let sessionContext: SessionContext
-    let photos: [Data]
+    /// Each element is one printout group: the photos the operator marked
+    /// as "same sheet." Consensus runs within a group, never across.
+    let printouts: [[Data]]
     let pd: Double
     let pdManualEntry: Bool
+    /// Invoked when a specific printout is missing cells and the operator
+    /// chose to add another photo to that printout. The int is the index
+    /// into `printouts` (== display number − 1). Caller reactivates that
+    /// printout in its capture state and dismisses this view.
+    var onReactivatePrintout: ((Int) -> Void)? = nil
 
     @Environment(OCRService.self) private var ocr
     @Environment(SyncCoordinator.self) private var sync
@@ -15,9 +22,11 @@ struct AnalysisPlaceholderView: View {
     @State private var phase: Phase = .running
     @State private var alertState: AlertState?
     @State private var navigation: NavigationPayload?
+    @State private var disagreement: DisagreementPayload?
     @State private var debugSnapshot: OCRDebugSnapshot?
     @State private var showDebugSheet: Bool = false
     @State private var presentAnalysis: Bool = false
+    @State private var presentDisagreement: Bool = false
 
     private enum Phase {
         case running
@@ -25,19 +34,14 @@ struct AnalysisPlaceholderView: View {
         case advancing
     }
 
-    // Stacking multiple `.alert(item:)` modifiers on the same view is a known
-    // SwiftUI footgun — only the outermost reliably presents, the others may
-    // silently fail. One alert state, one modifier, switch on the case.
     private enum AlertState: Identifiable {
-        case addPhoto(message: String)
-        case escalate(message: String)
         case error(message: String, snapshot: OCRDebugSnapshot?)
+        case printoutMissingCells(printoutIndex: Int, cells: [String])
 
         var id: String {
             switch self {
-            case .addPhoto: return "addPhoto"
-            case .escalate: return "escalate"
-            case .error:    return "error"
+            case .error: return "error"
+            case .printoutMissingCells(let idx, _): return "missing-\(idx)"
             }
         }
     }
@@ -48,6 +52,13 @@ struct AnalysisPlaceholderView: View {
         let droppedOutliers: [ConsistencyValidator.DroppedReading]
         let outcome: PrescriptionCalculationOutcome
     }
+
+    private struct DisagreementPayload {
+        let mode: DisagreementReviewView.Mode
+        let results: [PrintoutResult]
+    }
+
+    private var allPhotosFlat: [Data] { printouts.flatMap { $0 } }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -65,18 +76,6 @@ struct AnalysisPlaceholderView: View {
         }
         .alert(item: $alertState) { state in
             switch state {
-            case .addPhoto(let message):
-                return Alert(
-                    title: Text("Readings don't agree"),
-                    message: Text(message),
-                    dismissButton: .default(Text("Add another printout")) { dismiss() }
-                )
-            case .escalate(let message):
-                return Alert(
-                    title: Text("Consult team leader"),
-                    message: Text(message),
-                    dismissButton: .default(Text("Start over")) { dismiss() }
-                )
             case .error(let message, let snapshot):
                 #if DEBUG
                 if snapshot != nil {
@@ -95,6 +94,16 @@ struct AnalysisPlaceholderView: View {
                     title: Text("Could not read printout"),
                     message: Text(message),
                     dismissButton: .default(Text("Back to Photo")) { dismiss() }
+                )
+            case .printoutMissingCells(let printoutIndex, let cells):
+                return Alert(
+                    title: Text("Printout \(printoutIndex + 1) needs another photo"),
+                    message: Text(Self.missingCellsMessage(cells: cells)),
+                    primaryButton: .default(Text("Add photo to Printout \(printoutIndex + 1)")) {
+                        onReactivatePrintout?(printoutIndex)
+                        dismiss()
+                    },
+                    secondaryButton: .cancel(Text("Back")) { dismiss() }
                 )
             }
         }
@@ -117,8 +126,6 @@ struct AnalysisPlaceholderView: View {
                     finalOutcome: payload.outcome
                 )
             } else {
-                // Defensive fallback: binding flipped to true but payload is nil.
-                // Show an explicit error rather than a blank screen.
                 VStack(spacing: 12) {
                     Text("Navigation error")
                         .font(.headline)
@@ -130,30 +137,95 @@ struct AnalysisPlaceholderView: View {
                 .padding()
             }
         }
+        .navigationDestination(isPresented: $presentDisagreement) {
+            if let payload = disagreement {
+                DisagreementReviewView(
+                    mode: payload.mode,
+                    results: payload.results,
+                    onAddAnother: { dismiss() },
+                    onStartOver: {
+                        NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
+                    }
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Text("Navigation error")
+                        .font(.headline)
+                    Text("The disagreement data was lost. Please retake the photo.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Back to Photo") { dismiss() }
+                }
+                .padding()
+            }
+        }
     }
 
     @MainActor
     private func runOCR() async {
-        OCRLog.logger.info("OCR nav: runOCR started photos=\(photos.count)")
-        let images = photos.compactMap { UIImage(data: $0) }
-        guard !images.isEmpty else {
-            OCRLog.logger.error("OCR nav: no decodable images")
+        OCRLog.logger.info("OCR nav: runOCR started printouts=\(printouts.count) photos=\(printouts.reduce(0){$0+$1.count})")
+        let groupImages: [[UIImage]] = printouts.map { $0.compactMap { UIImage(data: $0) } }
+        guard groupImages.contains(where: { !$0.isEmpty }) else {
+            OCRLog.logger.error("OCR nav: no decodable images across any printout")
             presentError("No usable photo was captured.", snapshot: nil)
             return
         }
 
-        let batch = await ocr.processImages(images)
-        debugSnapshot = batch.debugSnapshot
+        let perPrintout = await ocr.processPrintoutsWithConsensus(groupImages)
 
-        if let err = batch.overallError, batch.successfulResults.isEmpty {
-            let baseMessage = humanReadable(err)
-            OCRLog.logger.error("OCR nav: parse failure error=\(String(describing: err), privacy: .public)")
-            await persistFailure(snapshot: batch.debugSnapshot)
-            presentError(baseMessage, snapshot: batch.debugSnapshot)
+        // Aggregate debug entries from every printout's consensus snapshot
+        // so #if DEBUG operators see the full picture of what was read.
+        let aggregatedEntries = perPrintout.flatMap(\.debugSnapshot.entries)
+        let aggregatedError = perPrintout.compactMap { $0.debugSnapshot.overallError.isEmpty ? nil : $0.debugSnapshot.overallError }.joined(separator: "; ")
+        debugSnapshot = OCRDebugSnapshot(entries: aggregatedEntries, overallError: aggregatedError)
+
+        for (pIdx, result) in perPrintout.enumerated() {
+            for dis in result.disagreements {
+                let summary = dis.votes.map { "\($0.value)×\($0.photoIndices.count)" }.joined(separator: ", ")
+                OCRLog.logger.info("OCR nav: printout=\(pIdx, privacy: .public) disagreement cell=\(dis.cellLabel, privacy: .public) votes=\(summary, privacy: .public)")
+            }
+        }
+
+        // First printout with unresolved cells — block here and ask for
+        // another photo OF THAT PRINTOUT. Different printouts are
+        // independent captures; fixing one shouldn't force the operator
+        // to recapture the rest.
+        if let firstMissing = perPrintout.enumerated().first(where: { !$0.element.missingCells.isEmpty }) {
+            let idx = firstMissing.offset
+            let cells = firstMissing.element.missingCells
+            OCRLog.logger.error("OCR nav: printout=\(idx, privacy: .public) missing=\(cells.joined(separator: ","), privacy: .public)")
+            await persistFailure(snapshot: debugSnapshot ?? OCRDebugSnapshot(entries: [], overallError: ""))
+            alertState = .printoutMissingCells(printoutIndex: idx, cells: cells)
+            phase = .awaitingDecision
             return
         }
 
-        let results = batch.successfulResults
+        // Flatten: one PrintoutResult per printout group. Each group's
+        // `perImage` holds identical merged results across its photos —
+        // take the first, tagged with its group index so downstream logs
+        // and audit trails refer to the printout, not the photo.
+        var results: [PrintoutResult] = []
+        for (idx, group) in perPrintout.enumerated() {
+            guard let first = group.perImage.first else { continue }
+            results.append(PrintoutResult(
+                rightEye: first.rightEye,
+                leftEye: first.leftEye,
+                pd: first.pd,
+                machineType: first.machineType,
+                sourcePhotoIndex: idx,
+                rawText: first.rawText,
+                handheldStarConfidenceRight: first.handheldStarConfidenceRight,
+                handheldStarConfidenceLeft: first.handheldStarConfidenceLeft
+            ))
+        }
+
+        guard !results.isEmpty else {
+            OCRLog.logger.error("OCR nav: consensus produced no PrintoutResults despite no missing cells")
+            await persistFailure(snapshot: debugSnapshot ?? OCRDebugSnapshot(entries: [], overallError: ""))
+            presentError("The captured photos couldn't be parsed. Please retake the photo.", snapshot: debugSnapshot)
+            return
+        }
+
         let detectedPD = results.compactMap(\.pd).first
         let finalPD = detectedPD ?? pd
         let finalPDManualEntry = (detectedPD == nil) ? true : false
@@ -166,7 +238,7 @@ struct AnalysisPlaceholderView: View {
             pd: finalPD,
             pdManualEntry: finalPDManualEntry,
             rawReadingsData: encoded,
-            photoData: photos
+            photoData: allPhotosFlat
         )
 
         let validator = ConsistencyValidator()
@@ -175,9 +247,6 @@ struct AnalysisPlaceholderView: View {
 
         switch outcome {
         case .consistent(let droppedOutliers):
-            // Phase 5: compute the final prescription only on `.consistent`.
-            // `.inconsistentAddPhoto` / `.inconsistentEscalate` short-circuit to
-            // the operator alerts below — no calculator invocation on those paths.
             let finalOutcome = PrescriptionCalculator.calculate(
                 printouts: results,
                 upstreamDroppedOutliers: droppedOutliers
@@ -192,10 +261,18 @@ struct AnalysisPlaceholderView: View {
             presentAnalysis = true
         case .inconsistentAddPhoto(let reason, let currentCount):
             phase = .awaitingDecision
-            alertState = .addPhoto(message: "\(reason). You have \(currentCount) of up to \(Constants.maxPhotosAllowed) printouts — please capture another.")
+            disagreement = DisagreementPayload(
+                mode: .addAnother(reason: reason, currentCount: currentCount),
+                results: results
+            )
+            presentDisagreement = true
         case .inconsistentEscalate(let reason):
             phase = .awaitingDecision
-            alertState = .escalate(message: "Five printouts captured but readings still don't agree (\(reason)). Please consult your team leader before proceeding.")
+            disagreement = DisagreementPayload(
+                mode: .escalate(reason: reason),
+                results: results
+            )
+            presentDisagreement = true
         }
     }
 
@@ -206,8 +283,6 @@ struct AnalysisPlaceholderView: View {
     }
 
     private func persistFailure(snapshot: OCRDebugSnapshot) async {
-        // rawReadingsData rides in CloudKit as rawReadingsJSON, which shares the
-        // CKRecord's ~1 MB field budget. Strip embedded JPEGs before encoding.
         let encoded = (try? JSONEncoder().encode(snapshot.strippingImages())) ?? Data()
         let failureRecord = PatientRefraction(
             patientNumber: patientNumber,
@@ -216,7 +291,7 @@ struct AnalysisPlaceholderView: View {
             pd: pd,
             pdManualEntry: pdManualEntry,
             rawReadingsData: encoded,
-            photoData: photos
+            photoData: allPhotosFlat
         )
         await sync.save(failureRecord)
     }
@@ -237,5 +312,13 @@ struct AnalysisPlaceholderView: View {
             }
         }
         return error.localizedDescription
+    }
+
+    /// Human-readable cell list for the missing-cells alert. Limits to 3
+    /// labels to keep the alert legible; the rest collapse to "+N more."
+    static func missingCellsMessage(cells: [String]) -> String {
+        let labels = cells.prefix(3).joined(separator: ", ")
+        let suffix = cells.count > 3 ? ", plus \(cells.count - 3) more" : ""
+        return "Missing: \(labels)\(suffix). Take another photo of the same printout to fill in the gap."
     }
 }

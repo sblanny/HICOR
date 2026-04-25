@@ -90,6 +90,24 @@ final class ROIPipelineExtractorTests: XCTestCase {
         return table
     }
 
+    private func fallbackDesktopOutput() -> ExtractedText {
+        ExtractedText(
+            rowBased: [
+                "[R]",
+                "+1.00 -0.50 108",
+                "+1.25 -0.50 110",
+                "+0.75 -0.25 104",
+                "AVG +1.00 -0.50 107",
+                "[L]",
+                "+0.75 -2.50 9",
+                "+2.00 -2.00 6",
+                "+2.00 -2.75 27",
+                "AVG +1.50 -2.50 15"
+            ],
+            columnBased: []
+        )
+    }
+
     func testHappyPathProducesRowBasedLines() async throws {
         let anchors = syntheticAnchors()
         let extractor = ROIPipelineExtractor(
@@ -103,11 +121,11 @@ final class ROIPipelineExtractorTests: XCTestCase {
         let text = try await extractor.extractText(from: blankImage())
         XCTAssertTrue(text.rowBased.contains("[R]"))
         XCTAssertTrue(text.rowBased.contains("[L]"))
-        XCTAssertTrue(text.rowBased.contains("-1.25 0.25 92"))
-        XCTAssertTrue(text.rowBased.contains("AVG -1.25 0.25 92"))
+        XCTAssertTrue(text.rowBased.contains("-1.25 -0.25 92"))
+        XCTAssertTrue(text.rowBased.contains("AVG -1.25 -0.25 92"))
     }
 
-    func testRectifyNilDelegatesToFallback() async throws {
+    func testFallbackStillThrowsWhenFallbackParseIsIncomplete() async throws {
         let fallback = StubFallback(output: ExtractedText(
             rowBased: ["[R]", "-1.25 -0.50 108"], columnBased: []))
         let extractor = ROIPipelineExtractor(
@@ -129,8 +147,8 @@ final class ROIPipelineExtractorTests: XCTestCase {
         }
     }
 
-    func testAnchorThrowDelegatesToFallback() async {
-        let fallback = StubFallback(output: .empty)
+    func testAnchorThrowUsesFallbackWhenParserCanRecoverFullGrid() async throws {
+        let fallback = StubFallback(output: fallbackDesktopOutput())
         let extractor = ROIPipelineExtractor(
             rectify: { $0 },
             enhance: { image, _ in image },
@@ -140,14 +158,10 @@ final class ROIPipelineExtractorTests: XCTestCase {
             cellOCR: ScriptedCellOCR(table: [:]),
             fallback: fallback
         )
-        do {
-            _ = try await extractor.extractText(from: blankImage())
-            XCTFail("expected throw")
-        } catch OCRService.OCRError.incompleteCells {
-            XCTAssertEqual(fallback.callCount, 1)
-        } catch {
-            XCTFail("wrong error: \(error)")
-        }
+        let text = try await extractor.extractText(from: blankImage())
+        XCTAssertEqual(fallback.callCount, 1)
+        XCTAssertTrue(text.rowBased.contains("AVG +1.00 -0.50 107"))
+        XCTAssertTrue(text.rowBased.contains("AVG +1.50 -2.50 15"))
     }
 
     func testAnyMissingCellThrowsIncompleteCells() async {
@@ -173,5 +187,56 @@ final class ROIPipelineExtractorTests: XCTestCase {
         } catch {
             XCTFail("wrong error: \(error)")
         }
+    }
+
+    func testSectionSignInferenceRequiresTwoDirectPeers() async throws {
+        let anchors = syntheticAnchors()
+        var table = fullCellTable(anchors: anchors)
+        let rightRows = CellLayout.grk6000Desktop
+            .cells(given: anchors)
+            .filter { $0.eye == .right && $0.column == .sph }
+        for cell in rightRows {
+            table[cell] = "1.25"
+        }
+        table[rightRows.first { $0.row == .r1 }!] = "+1.25"
+
+        let extractor = ROIPipelineExtractor(
+            rectify: { $0 },
+            enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
+            anchorDetector: StubAnchorDetector(result: .success(anchors)),
+            cellOCR: ScriptedCellOCR(table: table),
+            fallback: StubFallback(output: .empty)
+        )
+
+        let text = try await extractor.extractText(from: blankImage())
+        XCTAssertEqual(text.rowBased[2], "1.25 -0.25 92")
+        XCTAssertEqual(text.rowBased[3], "1.25 -0.25 92")
+    }
+
+    func testSectionSignInferenceUsesStrongConsensusOnly() async throws {
+        let anchors = syntheticAnchors()
+        var table = fullCellTable(anchors: anchors)
+        let rightRows = CellLayout.grk6000Desktop
+            .cells(given: anchors)
+            .filter { $0.eye == .right && $0.column == .sph }
+        for cell in rightRows {
+            table[cell] = "1.25"
+        }
+        table[rightRows.first { $0.row == .r1 }!] = "+1.25"
+        table[rightRows.first { $0.row == .r3 }!] = "+1.25"
+
+        let extractor = ROIPipelineExtractor(
+            rectify: { $0 },
+            enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
+            anchorDetector: StubAnchorDetector(result: .success(anchors)),
+            cellOCR: ScriptedCellOCR(table: table),
+            fallback: StubFallback(output: .empty)
+        )
+
+        let text = try await extractor.extractText(from: blankImage())
+        XCTAssertEqual(text.rowBased[2], "+1.25 -0.25 92")
+        XCTAssertEqual(text.rowBased[4], "+1.25 -0.25 92")
     }
 }

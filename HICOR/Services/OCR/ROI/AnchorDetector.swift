@@ -26,28 +26,56 @@ class AnchorDetector {
         let lMarker = lines.first(where: { matchesLeftMarker($0.text) })
 
         let sphMatches = lines.filter { matchesColumnHeader($0.text, target: "SPH") }
-        let cylMatches = lines.filter { matchesColumnHeader($0.text, target: "CYL") }
+        let rawCylMatches = lines.filter { matchesColumnHeader($0.text, target: "CYL") }
         let axMatches  = lines.filter { matchesColumnHeader($0.text, target: "AX") }
         let avgMatches = lines.filter { matchesColumnHeader($0.text, target: "AVG") }
 
-        // Section split by Y-clustering SPH/CYL/AX column headers. Find the
-        // biggest Y-gap in the sorted list — that gap separates the two eye
-        // sections stacked vertically on the GRK-6000 desktop slip. AVG is
-        // excluded because it sits at the BOTTOM of each section; including
-        // it would pull the split down past the real boundary.
-        let headerYs = (sphMatches + cylMatches + axMatches)
-            .map { $0.frame.midY }
-            .sorted()
-        guard headerYs.count >= 2 else {
-            throw Error.insufficientAnchors(missing: ["column headers (found \(headerYs.count), need ≥2)"])
-        }
-        var biggest: (lo: CGFloat, hi: CGFloat) = (headerYs[0], headerYs[0])
-        for i in 1..<headerYs.count {
-            if headerYs[i] - headerYs[i - 1] > biggest.hi - biggest.lo {
-                biggest = (headerYs[i - 1], headerYs[i])
+        // Exclude the global "CYL (-)" polarity label that appears near the
+        // top of the slip on the "VD = 0mm  CYL (-)" row. It's NOT a per-eye
+        // column header and including it skews the section split heuristic.
+        // Reliable signature: a per-eye CYL header is flanked horizontally by
+        // SPH and/or AX headers on the same row band; the global CYL label
+        // sits alone on its row with no SPH/AX neighbors. Row band = ±1.2×
+        // header height (accommodates baseline jitter on dim prints).
+        let cylMatches = rawCylMatches.filter { cyl in
+            let ySlop = cyl.frame.height * 1.2
+            let hasRowNeighbor = (sphMatches + axMatches).contains { neighbor in
+                abs(neighbor.frame.midY - cyl.frame.midY) < ySlop
             }
+            return hasRowNeighbor
         }
-        let sectionSplitY = (biggest.lo + biggest.hi) / 2.0
+
+        // Section split. Two strategies depending on what survived filtering:
+        //   A. Both eyes have column headers → biggest Y-gap in the header
+        //      list brackets the eye-to-eye boundary. AVG is excluded because
+        //      the within-section header→AVG gap can rival or exceed the
+        //      between-section gap, pulling the split to the wrong place.
+        //   B. Only one eye's headers survive (dim capture drops the other
+        //      eye's SPH/CYL/AX entirely) → fall back to AVG-to-AVG midpoint.
+        //      Each eye prints exactly one AVG; as long as both are detected
+        //      the midpoint lies between the two sections.
+        let hasBothEyesHeaders = sphMatches.count >= 2 || cylMatches.count >= 2 || axMatches.count >= 2
+        let sectionSplitY: CGFloat
+        if hasBothEyesHeaders {
+            let headerYs = (sphMatches + cylMatches + axMatches)
+                .map { $0.frame.midY }
+                .sorted()
+            guard headerYs.count >= 2 else {
+                throw Error.insufficientAnchors(missing: ["column headers (found \(headerYs.count), need ≥2)"])
+            }
+            var biggest: (lo: CGFloat, hi: CGFloat) = (headerYs[0], headerYs[0])
+            for i in 1..<headerYs.count {
+                if headerYs[i] - headerYs[i - 1] > biggest.hi - biggest.lo {
+                    biggest = (headerYs[i - 1], headerYs[i])
+                }
+            }
+            sectionSplitY = (biggest.lo + biggest.hi) / 2.0
+        } else if avgMatches.count >= 2 {
+            let avgYs = avgMatches.map(\.frame.midY).sorted()
+            sectionSplitY = (avgYs[0] + avgYs[1]) / 2.0
+        } else {
+            throw Error.insufficientAnchors(missing: ["column headers or AVG markers for both eyes"])
+        }
 
         // On GRK-6000 desktop prints the right eye section is always on top
         // (printer convention). We still cross-check with any detected

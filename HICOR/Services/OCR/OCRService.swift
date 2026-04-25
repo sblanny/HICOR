@@ -40,6 +40,36 @@ struct OCRBatchResult: Equatable {
     }
 }
 
+/// Result of within-printout OCR consensus. Each cell's winning value is
+/// chosen by majority vote across the photos of that printout; ties
+/// break to the earliest photo carrying the tied value. `perImage`
+/// holds the single merged PrintoutResult (represented as a one-element
+/// array for continuity with the old batch API). `missingCells` names
+/// catalog cells that no photo resolved. `disagreements` surfaces cells
+/// where photos of the same sheet produced different values — per the
+/// feedback_surface_automatic_exclusions memory, any automatic picking
+/// between conflicting readings must be visible, not hidden.
+struct OCRConsensusResult {
+    struct Disagreement: Equatable {
+        let cellLabel: String
+        /// All distinct values seen for this cell, each paired with the
+        /// photo indices that voted for it. The winner (first in the
+        /// list) is the value chosen; later entries are the dissenters.
+        let votes: [(value: String, photoIndices: [Int])]
+
+        static func == (lhs: Disagreement, rhs: Disagreement) -> Bool {
+            lhs.cellLabel == rhs.cellLabel &&
+                lhs.votes.map(\.value) == rhs.votes.map(\.value) &&
+                lhs.votes.map(\.photoIndices) == rhs.votes.map(\.photoIndices)
+        }
+    }
+
+    let perImage: [PrintoutResult]
+    let missingCells: [String]
+    let disagreements: [Disagreement]
+    let debugSnapshot: OCRDebugSnapshot
+}
+
 enum ParseScorer {
     // Weights shipped provisional 2026-04-16. No multi-patient calibration fixtures
     // existed at plan time; the only real debug logs were from one printout.
@@ -138,14 +168,206 @@ final class OCRService {
         throw Self.errorFor(result: result) ?? .unrecognizedFormat
     }
 
-    /// Validates a single captured photo at capture time. Returns nil on any OCR failure
-    /// (unreadable image data, unrecognized format, insufficient readings). Used by the
-    /// capture flow to reject photos before they're added to PhotoCaptureState —
-    /// preserves the all-or-nothing guarantee (see project_ocr_all_or_nothing memory)
-    /// by enforcing it at capture time rather than at batch submission.
-    func runSingle(imageData: Data) async -> PrintoutResult? {
-        guard let image = UIImage(data: imageData) else { return nil }
-        return try? await processImage(image)
+    /// Runs consensus across a set of printouts, where each printout is
+    /// represented by one or more photos of the SAME physical sheet.
+    /// Consensus-borrowing happens only within a printout group, never
+    /// across groups — photos of different sheets must not mix cell
+    /// values. Returns one result per input group, in input order.
+    func processPrintoutsWithConsensus(_ printouts: [[UIImage]]) async -> [OCRConsensusResult] {
+        var out: [OCRConsensusResult] = []
+        out.reserveCapacity(printouts.count)
+        for group in printouts {
+            out.append(await processImagesWithConsensus(group))
+        }
+        return out
+    }
+
+    /// Runs OCR across a set of photos assumed to be captures of the SAME
+    /// physical printout. A cell missing from one photo is filled with
+    /// the same cell's value from another photo that did resolve it. This
+    /// is safe only within a single-sheet group — callers must not pass
+    /// photos of different sheets here, use `processPrintoutsWithConsensus`
+    /// for multi-sheet capture sets. `processImages` is retained for the
+    /// per-photo strict mode used by existing test fixtures.
+    func processImagesWithConsensus(_ images: [UIImage]) async -> OCRConsensusResult {
+        var perPhoto: [(index: Int, partial: PartialCellExtraction)] = []
+        var failureMessages: [String] = []
+
+        for (index, image) in images.enumerated() {
+            do {
+                let partial = try await extractor.extractCellValues(from: image)
+                perPhoto.append((index, partial))
+                OCRLog.logger.info("Consensus photo=\(index, privacy: .public) resolved=\(partial.values.count, privacy: .public) missing=\(partial.missing.count, privacy: .public)")
+            } catch {
+                let message = "photo \(index) extraction failed: \(String(describing: error))"
+                OCRLog.logger.error("Consensus \(message, privacy: .public)")
+                failureMessages.append(message)
+            }
+        }
+
+        // No photo even gave us anchors — nothing to merge.
+        guard !perPhoto.isEmpty else {
+            let snapshot = OCRDebugSnapshot(
+                entries: [],
+                overallError: failureMessages.first ?? "no photos produced extractions"
+            )
+            return OCRConsensusResult(
+                perImage: [],
+                missingCells: ["no readable photo — recapture required"],
+                disagreements: [],
+                debugSnapshot: snapshot
+            )
+        }
+
+        // The full CellIdentity catalog is the same across any photo that
+        // made it through anchor detection — driven by the layout, not
+        // the image. Use the first photo's cells as the catalog probe.
+        let catalog: [CellIdentity] = perPhoto[0].partial.cells.map(CellIdentity.init)
+
+        // Collect every vote for every cell across photos. A "vote" is
+        // one photo's resolved value for that cell; nil resolutions don't
+        // vote. Majority wins below — ties break to the value whose
+        // earliest-voting photo came first in the capture order.
+        var votesByIdentity: [CellIdentity: [(value: String, photoIndex: Int)]] = [:]
+        for (photoIndex, partial) in perPhoto {
+            for (cell, value) in partial.values {
+                let id = CellIdentity(cell)
+                votesByIdentity[id, default: []].append((value, photoIndex))
+            }
+        }
+
+        // Resolve each cell by majority vote, and track disagreements
+        // (cells where photos of the same sheet produced different
+        // values) so the UI can surface them.
+        var valuesByIdentity: [CellIdentity: String] = [:]
+        var disagreements: [OCRConsensusResult.Disagreement] = []
+        for (id, votes) in votesByIdentity {
+            let distinct = Dictionary(grouping: votes, by: \.value)
+            let maxCount = distinct.values.map(\.count).max() ?? 0
+            // Value groups tied for the most votes. Among those, pick the
+            // group whose earliest-voting photo came first — a conservative,
+            // deterministic tie-break.
+            let topGroups = distinct.filter { $0.value.count == maxCount }
+            let winner = topGroups.min { lhs, rhs in
+                let lMin = lhs.value.map(\.photoIndex).min() ?? Int.max
+                let rMin = rhs.value.map(\.photoIndex).min() ?? Int.max
+                return lMin < rMin
+            }
+            guard let winner else { continue }
+            valuesByIdentity[id] = winner.key
+
+            if distinct.count > 1 {
+                // Record the disagreement so it gets logged and can be
+                // surfaced to the operator. Winner first, dissenters after.
+                var voteList: [(value: String, photoIndices: [Int])] = []
+                let winnerIndices = distinct[winner.key]!.map(\.photoIndex).sorted()
+                voteList.append((winner.key, winnerIndices))
+                for (value, group) in distinct where value != winner.key {
+                    voteList.append((value, group.map(\.photoIndex).sorted()))
+                }
+                disagreements.append(OCRConsensusResult.Disagreement(
+                    cellLabel: id.label,
+                    votes: voteList
+                ))
+                let summary = voteList.map { "\($0.value)×\($0.photoIndices.count)" }.joined(separator: ", ")
+                OCRLog.logger.info("Consensus DISAGREEMENT cell=\(id.label, privacy: .public) votes=\(summary, privacy: .public) chose=\(winner.key, privacy: .public)")
+            }
+        }
+
+        // Catalog cells nobody resolved — recapture required.
+        let stillMissing: [String] = catalog.compactMap { id in
+            valuesByIdentity[id] == nil ? id.label : nil
+        }
+
+        guard stillMissing.isEmpty else {
+            return OCRConsensusResult(
+                perImage: [],
+                missingCells: stillMissing,
+                disagreements: disagreements,
+                debugSnapshot: OCRDebugSnapshot(
+                    entries: [],
+                    overallError: "incompleteCells across all photos: \(stillMissing.joined(separator: ", "))"
+                )
+            )
+        }
+
+        // One merged PrintoutResult per printout group. Tag sourcePhotoIndex
+        // with the first photo's index so audit trails refer to the capture
+        // that triggered the analysis.
+        let rowBased = assembleRowLinesByIdentity(valuesByIdentity: valuesByIdentity)
+        let anchorPhotoIndex = perPhoto.first!.index
+        guard let parsed = try? PrintoutParser.parse(lines: rowBased, photoIndex: anchorPhotoIndex) else {
+            return OCRConsensusResult(
+                perImage: [],
+                missingCells: [],
+                disagreements: disagreements,
+                debugSnapshot: OCRDebugSnapshot(
+                    entries: [],
+                    overallError: "PrintoutParser failed on merged rowBased"
+                )
+            )
+        }
+
+        let snapshotEntry = OCRDebugSnapshot.Entry(
+            photoIndex: anchorPhotoIndex,
+            rowBasedLines: rowBased,
+            rowBasedFormat: "desktop",
+            columnBasedLines: rowBased,
+            columnBasedFormat: "desktop",
+            chosenStrategy: "consensus",
+            parseError: nil,
+            preprocessedImageData: nil,
+            variantScores: [],
+            revisionUsed: 0,
+            winningVariant: nil
+        )
+        return OCRConsensusResult(
+            perImage: [parsed],
+            missingCells: [],
+            disagreements: disagreements,
+            debugSnapshot: OCRDebugSnapshot(entries: [snapshotEntry], overallError: "")
+        )
+    }
+
+    /// Identity key for cells that ignores the per-photo rect. Cells of
+    /// the same (eye, column, row) across different photos are the same
+    /// physical measurement, so consensus treats them as interchangeable.
+    private struct CellIdentity: Hashable {
+        let eye: CellROI.Eye
+        let column: CellROI.Column
+        let row: CellROI.Row
+
+        init(_ cell: CellROI) {
+            self.eye = cell.eye
+            self.column = cell.column
+            self.row = cell.row
+        }
+
+        init(eye: CellROI.Eye, column: CellROI.Column, row: CellROI.Row) {
+            self.eye = eye
+            self.column = column
+            self.row = row
+        }
+
+        var label: String { "\(eye.rawValue) \(column.rawValue) \(row.rawValue)" }
+    }
+
+    /// Assemble rowBased lines directly from the identity-keyed value map.
+    /// Output matches ROIPipelineExtractor's own assembly format so the
+    /// existing PrintoutParser handles it unchanged.
+    private func assembleRowLinesByIdentity(valuesByIdentity: [CellIdentity: String]) -> [String] {
+        var lines: [String] = []
+        for eye in [CellROI.Eye.right, .left] {
+            lines.append(eye == .right ? "[R]" : "[L]")
+            for row in [CellROI.Row.r1, .r2, .r3, .avg] {
+                let sph = valuesByIdentity[CellIdentity(eye: eye, column: .sph, row: row)] ?? ""
+                let cyl = valuesByIdentity[CellIdentity(eye: eye, column: .cyl, row: row)] ?? ""
+                let ax  = valuesByIdentity[CellIdentity(eye: eye, column: .ax,  row: row)] ?? ""
+                let prefix = row == .avg ? "AVG " : ""
+                lines.append("\(prefix)\(sph) \(cyl) \(ax)")
+            }
+        }
+        return lines
     }
 
     func processImages(_ images: [UIImage]) async -> OCRBatchResult {
@@ -184,6 +406,7 @@ final class OCRService {
             extracted = try await extractor.extractText(from: image)
         } catch {
             extractionErrorDescription = String(describing: error)
+            OCRLog.logger.error("OCR extractor threw: \(String(describing: error), privacy: .public)")
             return OCRImageResult(
                 photoIndex: photoIndex,
                 printout: nil,
