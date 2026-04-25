@@ -79,4 +79,79 @@ final class DesktopFormatParserTests: XCTestCase {
         XCTAssertEqual(result.leftEye?.readings.first?.sph, -1.00)
         XCTAssertEqual(result.pd, 60.0)
     }
+
+    // MARK: - Plano (signless 0.00) CYL parsing
+    //
+    // The GRK-6000 prints plano CYL as "0.00" with no sign. Forcing it
+    // negative makes Double parse as IEEE-754 -0.0, whose sign bit
+    // poisoned `value >= 0 ? "+" : ""` display formatters into rendering
+    // "+-0.00" (which then wrapped on screen as "+-0.0\n0").
+
+    func testParsesUnsignedZeroCYLAsPositiveZero() {
+        let lines = [
+            "Highlands Optical",
+            "<R>",
+            "+ 1.50  0.00  90",
+            "AVG + 1.50  0.00  90",
+            "PD: 64 mm"
+        ]
+        let result = DesktopFormatParser.parse(lines: lines, photoIndex: 0)
+        guard let reading = result.rightEye?.readings.first else {
+            return XCTFail("Expected a parsed reading")
+        }
+        XCTAssertEqual(reading.cyl, 0.0)
+        XCTAssertEqual(reading.cyl.sign, .plus,
+                       "Plano CYL must be positive zero; -0.0 leaks through display formatters as \"+-0.00\".")
+    }
+
+    func testParsesUnsignedZeroCYLAlongsideSignedCYL() {
+        let lines = [
+            "<R>",
+            "+ 1.50  0.00  90",
+            "+ 1.25  - 0.25  85",
+            "AVG + 1.25  - 0.25  88"
+        ]
+        let result = DesktopFormatParser.parse(lines: lines, photoIndex: 0)
+        let readings = result.rightEye?.readings ?? []
+        XCTAssertEqual(readings.count, 2)
+        XCTAssertEqual(readings[0].cyl, 0.0)
+        XCTAssertEqual(readings[0].cyl.sign, .plus)
+        XCTAssertEqual(readings[1].cyl, -0.25)
+    }
+
+    func testHandlesMultipleZeroCYLInSameEye() {
+        // Mirrors the real-device capture in the bug report: left eye has
+        // 0.00 / -0.25 / 0.00 across r1/r2/r3.
+        let lines = [
+            "<L>",
+            "- 2.50  0.00  1",
+            "- 2.50  - 0.25  175",
+            "- 2.50  0.00  1",
+            "AVG - 2.50  0.00  1"
+        ]
+        let result = DesktopFormatParser.parse(lines: lines, photoIndex: 0)
+        let readings = result.leftEye?.readings ?? []
+        XCTAssertEqual(readings.count, 3)
+        XCTAssertEqual(readings[0].cyl, 0.0)
+        XCTAssertEqual(readings[0].cyl.sign, .plus)
+        XCTAssertEqual(readings[1].cyl, -0.25)
+        XCTAssertEqual(readings[2].cyl, 0.0)
+        XCTAssertEqual(readings[2].cyl.sign, .plus)
+        XCTAssertEqual(result.leftEye?.machineAvgCYL, 0.0)
+        XCTAssertEqual(result.leftEye?.machineAvgCYL?.sign, .plus)
+    }
+
+    func testRejectsRowWithMalformedSignToken() {
+        // "+-0.00" is the literal pre-fix mangled token. The shape gate
+        // and Double() coercion both reject it; pin the behavior so a
+        // future "be helpful, try both signs" parser can't reintroduce
+        // the rendering bug.
+        let lines = [
+            "<R>",
+            "+ 1.50  +-0.00  90"
+        ]
+        let result = DesktopFormatParser.parse(lines: lines, photoIndex: 0)
+        XCTAssertTrue(result.rightEye?.readings.isEmpty ?? true,
+                      "Row with malformed +- sign token must not produce a reading")
+    }
 }

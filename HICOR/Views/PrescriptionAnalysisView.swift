@@ -185,8 +185,8 @@ struct PrescriptionAnalysisView: View {
             Text(label).font(.subheadline.weight(.semibold))
             if let rx = rx {
                 HStack(spacing: 16) {
-                    Text(formatDiopter(rx.sph)).frame(width: 70, alignment: .leading)
-                    Text(formatDiopter(rx.cyl)).frame(width: 70, alignment: .leading)
+                    Text(DiopterFormatter.format(rx.sph)).frame(width: 70, alignment: .leading)
+                    Text(DiopterFormatter.format(rx.cyl)).frame(width: 70, alignment: .leading)
                     Text("\(rx.ax)°").frame(width: 50, alignment: .leading)
                 }
                 .font(.system(.title3, design: .monospaced))
@@ -302,8 +302,8 @@ struct PrescriptionAnalysisView: View {
                     HStack {
                         Text("\(row.photoIndex + 1)").frame(width: 50, alignment: .leading)
                         Text(row.eyeLabel).frame(width: 40, alignment: .leading)
-                        Text(formatDiopter(row.sph)).frame(width: 60, alignment: .leading)
-                        Text(row.isSphOnly ? "—" : formatDiopter(row.cyl)).frame(width: 60, alignment: .leading)
+                        Text(DiopterFormatter.format(row.sph)).frame(width: 60, alignment: .leading)
+                        Text(row.isSphOnly ? "—" : DiopterFormatter.format(row.cyl)).frame(width: 60, alignment: .leading)
                         Text(row.isSphOnly ? "—" : "\(row.ax)°").frame(width: 40, alignment: .leading)
                     }
                     .font(.system(.caption, design: .monospaced))
@@ -434,10 +434,6 @@ struct PrescriptionAnalysisView: View {
         }
         .padding()
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func formatDiopter(_ value: Double) -> String {
-        PrintoutReadingsCard.formatDiopter(value)
     }
 
     // MARK: - Save button

@@ -236,7 +236,7 @@ struct ConsistencyValidator {
               deviation > Constants.sphAgreementThreshold else {
             return nil
         }
-        return "SPH AVG \(formatSigned(candidate.sph)) differs from majority \(formatSigned(majoritySph)) by \(String(format: "%.2f", deviation)) D"
+        return "SPH AVG \(DiopterFormatter.format(candidate.sph)) differs from majority \(DiopterFormatter.format(majoritySph)) by \(String(format: "%.2f", deviation)) D"
     }
 
     private func cylOutlierReason(candidate: PerEyeAvg, others: [PerEyeAvg]) -> String? {
@@ -250,7 +250,7 @@ struct ConsistencyValidator {
               deviation > Constants.cylAgreementThreshold else {
             return nil
         }
-        return "CYL AVG \(formatSigned(candidateCyl)) differs from majority \(formatSigned(majorityCyl)) by \(String(format: "%.2f", deviation)) D"
+        return "CYL AVG \(DiopterFormatter.format(candidateCyl)) differs from majority \(DiopterFormatter.format(majorityCyl)) by \(String(format: "%.2f", deviation)) D"
     }
 
     private func stripEyeReadings(from results: [PrintoutResult], photoIndex: Int, eye: Eye) -> [PrintoutResult] {
@@ -275,8 +275,4 @@ struct ConsistencyValidator {
             .filter { ReadingPlausibility.isPlausibleSPH($0) }
     }
 
-    private func formatSigned(_ value: Double) -> String {
-        let sign = value >= 0 ? "+" : ""
-        return "\(sign)\(String(format: "%.2f", value))"
-    }
 }

@@ -150,14 +150,25 @@ enum DesktopFormatParser {
             let cylToken = numerics[1]
             let axToken  = numerics[2]
 
-            // Desktop header states "CYL (-)" — all cylinders are negative
-            // by format. Reject explicit + CYL as OCR garbage; coerce
-            // unsigned values to negative (ML Kit drops thin minus signs
-            // on thermal paper).
+            // Desktop header states "CYL (-)" — non-zero cylinders are
+            // always negative, so unsigned non-zero tokens are coerced
+            // negative (ML Kit drops thin minus signs on thermal paper).
+            // Plano (0.00) prints signless and must stay signless: forcing
+            // "-0.00" makes Double parse as IEEE-754 -0.0, whose sign bit
+            // poisons display formatters that branch on `value >= 0`
+            // (manifests as "+-0.00" / wrapped "+-0.0\n0" on screen).
+            // Reject explicit + CYL as OCR garbage.
             if cylToken.hasPrefix("+") {
                 return nil
             }
-            let cylSigned = cylToken.hasPrefix("-") ? cylToken : "-" + cylToken
+            let cylSigned: String
+            if cylToken.hasPrefix("-") {
+                cylSigned = cylToken
+            } else if Double(cylToken) == 0 {
+                cylSigned = cylToken
+            } else {
+                cylSigned = "-" + cylToken
+            }
 
             // Unsigned SPH takes the sign hint from AVG when provided.
             let sphSigned: String = {

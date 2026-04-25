@@ -228,14 +228,9 @@ private struct HistoryRow: View {
     }
 
     private func eyeSummary(sph: Double, cyl: Double, ax: Int) -> String {
-        let sphStr = formatSigned(sph)
-        let cylStr = formatSigned(cyl)
+        let sphStr = DiopterFormatter.format(sph)
+        let cylStr = DiopterFormatter.format(cyl)
         return "\(sphStr) / \(cylStr) × \(String(format: "%03d", ax))"
-    }
-
-    private func formatSigned(_ v: Double) -> String {
-        let sign = v >= 0 ? "+" : "-"
-        return String(format: "%@%.2f", sign, abs(v))
     }
 
     @ViewBuilder

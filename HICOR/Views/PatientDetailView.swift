@@ -96,8 +96,8 @@ struct PatientDetailView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.subheadline.weight(.semibold))
             HStack(spacing: 16) {
-                Text(formatDiopter(sph)).frame(width: 70, alignment: .leading)
-                Text(formatDiopter(cyl)).frame(width: 70, alignment: .leading)
+                Text(DiopterFormatter.format(sph)).frame(width: 70, alignment: .leading)
+                Text(DiopterFormatter.format(cyl)).frame(width: 70, alignment: .leading)
                 Text("\(ax)°").frame(width: 50, alignment: .leading)
             }
             .font(.system(.title3, design: .monospaced))
@@ -336,7 +336,7 @@ struct PatientDetailView: View {
                 if let aSPH = reading.machineAvgSPH,
                    let aCYL = reading.machineAvgCYL,
                    let aAX  = reading.machineAvgAX {
-                    Text("\(label) AVG: \(formatDiopter(aSPH)) / \(formatDiopter(aCYL)) × \(aAX)°")
+                    Text("\(label) AVG: \(DiopterFormatter.format(aSPH)) / \(DiopterFormatter.format(aCYL)) × \(aAX)°")
                         .font(.system(.caption, design: .monospaced).weight(.semibold))
                         .foregroundStyle(.blue)
                 }
@@ -405,16 +405,11 @@ struct PatientDetailView: View {
 
     // MARK: - Formatting
 
-    private func formatDiopter(_ value: Double) -> String {
-        let sign = value >= 0 ? "+" : ""
-        return "\(sign)\(String(format: "%.2f", value))"
-    }
-
     private func formatReading(_ r: RawReading) -> String {
         if r.isSphOnly {
-            return "\(formatDiopter(r.sph)) / — × —"
+            return "\(DiopterFormatter.format(r.sph)) / — × —"
         }
-        return "\(formatDiopter(r.sph)) / \(formatDiopter(r.cyl)) × \(r.ax)°"
+        return "\(DiopterFormatter.format(r.sph)) / \(DiopterFormatter.format(r.cyl)) × \(r.ax)°"
     }
 
     private func formatSourceLabel(_ source: String) -> String {

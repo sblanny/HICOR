@@ -79,8 +79,8 @@ struct PrintoutReadingsCard: View {
 
     private func rxRow(sph: Double, cyl: Double, ax: Int, lowConfidence: Bool, isSphOnly: Bool) -> some View {
         HStack(spacing: 12) {
-            Text(PrintoutReadingsCard.formatDiopter(sph)).frame(width: 60, alignment: .leading)
-            Text(isSphOnly ? "—" : PrintoutReadingsCard.formatDiopter(cyl)).frame(width: 60, alignment: .leading)
+            Text(DiopterFormatter.format(sph)).frame(width: 60, alignment: .leading)
+            Text(isSphOnly ? "—" : DiopterFormatter.format(cyl)).frame(width: 60, alignment: .leading)
             Text(isSphOnly ? "—" : "\(ax)°").frame(width: 50, alignment: .leading)
             if lowConfidence {
                 Text("E")
@@ -93,8 +93,4 @@ struct PrintoutReadingsCard: View {
         .opacity(lowConfidence ? 0.55 : 1.0)
     }
 
-    static func formatDiopter(_ value: Double) -> String {
-        let sign = value >= 0 ? "+" : ""
-        return "\(sign)\(String(format: "%.2f", value))"
-    }
 }
