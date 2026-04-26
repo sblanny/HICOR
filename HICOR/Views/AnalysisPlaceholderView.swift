@@ -14,6 +14,11 @@ struct AnalysisPlaceholderView: View {
     /// into `printouts` (== display number − 1). Caller reactivates that
     /// printout in its capture state and dismisses this view.
     var onReactivatePrintout: ((Int) -> Void)? = nil
+    /// Invoked when the operator taps "Capture another printout" on
+    /// DisagreementReviewView. Caller pops this view off the navigation
+    /// stack so the operator lands back on PhotoCaptureView with their
+    /// existing printouts intact.
+    var onReturnToCapture: (() -> Void)? = nil
 
     @Environment(OCRService.self) private var ocr
     @Environment(SyncCoordinator.self) private var sync
@@ -146,10 +151,11 @@ struct AnalysisPlaceholderView: View {
                         // dismiss() captured here pops only the topmost
                         // navigation destination (DisagreementReviewView),
                         // leaving the operator stranded on this view's
-                        // spinner. Posting .hicorReturnToCapture lets
-                        // PhotoCaptureView pop its own destination binding,
-                        // which pops both views in one step.
-                        NotificationCenter.default.post(name: .hicorReturnToCapture, object: nil)
+                        // spinner. The closure was passed down from
+                        // PhotoCaptureView and toggles its destination
+                        // binding directly — popping AnalysisPlaceholder
+                        // View pops DisagreementReviewView above it too.
+                        onReturnToCapture?()
                     },
                     onStartOver: {
                         NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)

@@ -104,6 +104,15 @@ struct PhotoCaptureView: View {
                 onReactivatePrintout: { idx in
                     guard nonEmpty.indices.contains(idx) else { return }
                     state.reactivatePrintout(id: nonEmpty[idx].id)
+                },
+                onReturnToCapture: {
+                    // Closure capture mutates this view's state directly.
+                    // SwiftUI pops AnalysisPlaceholderView (and Disagreement
+                    // ReviewView above it) when the binding turns false.
+                    // PhotoCaptureState is preserved across the round trip,
+                    // so the operator's existing printouts are intact when
+                    // they land back here.
+                    navigateToAnalysis = false
                 }
             )
         }
@@ -122,13 +131,6 @@ struct PhotoCaptureView: View {
             Button("Discard and Continue", role: .destructive) { postReturnToRoot() }
         } message: {
             Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .hicorReturnToCapture)) { _ in
-            // Posted by DisagreementReviewView's "Capture another printout"
-            // path. Popping AnalysisPlaceholderView pops everything above
-            // it too (DisagreementReviewView), returning here with the
-            // operator's existing printouts intact.
-            navigateToAnalysis = false
         }
         #if DEBUG
         .safeAreaInset(edge: .bottom) {
