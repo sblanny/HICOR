@@ -187,7 +187,9 @@ struct PrescriptionAnalysisView: View {
                 HStack(spacing: 16) {
                     Text(DiopterFormatter.format(rx.sph)).frame(width: 70, alignment: .leading)
                     Text(DiopterFormatter.format(rx.cyl)).frame(width: 70, alignment: .leading)
-                    Text(DiopterFormatter.formatAxis(rx.ax)).frame(width: 50, alignment: .leading)
+                    Text(DiopterFormatter.formatAxis(rx.ax))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .font(.system(.title3, design: .monospaced))
             } else {

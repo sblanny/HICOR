@@ -98,7 +98,9 @@ struct PatientDetailView: View {
             HStack(spacing: 16) {
                 Text(DiopterFormatter.format(sph)).frame(width: 70, alignment: .leading)
                 Text(DiopterFormatter.format(cyl)).frame(width: 70, alignment: .leading)
-                Text(DiopterFormatter.formatAxis(ax)).frame(width: 50, alignment: .leading)
+                Text(DiopterFormatter.formatAxis(ax))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .font(.system(.title3, design: .monospaced))
             if let source {
