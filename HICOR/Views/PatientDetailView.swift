@@ -272,7 +272,7 @@ struct PatientDetailView: View {
 
     private func droppedOutlierRow(_ dr: ConsistencyValidator.DroppedReading) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Photo \(dr.photoIndex + 1) — \(dr.eye == .right ? "Right (OD)" : "Left (OS)")")
+            Text("Printout \(dr.photoIndex + 1) — \(dr.eye == .right ? "Right (OD)" : "Left (OS)")")
                 .font(.subheadline.weight(.semibold))
             Text(formatReading(dr.reading))
                 .font(.system(.caption, design: .monospaced))
@@ -283,13 +283,13 @@ struct PatientDetailView: View {
         .padding(.vertical, 2)
     }
 
-    // MARK: - Per-photo readings
+    // MARK: - Per-printout readings
 
     @ViewBuilder
     private var perPhotoReadingsSection: some View {
         let results = decodedPrintouts
         if !results.isEmpty {
-            DisclosureGroup("Per-photo readings (\(results.count))") {
+            DisclosureGroup("Per-printout readings (\(results.count))") {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(results.enumerated()), id: \.offset) { idx, r in
                         perPhotoCard(index: idx, result: r)
@@ -305,7 +305,7 @@ struct PatientDetailView: View {
     private func perPhotoCard(index: Int, result: PrintoutResult) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Photo \(index + 1)").font(.subheadline.weight(.semibold))
+                Text("Printout \(index + 1)").font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(result.machineType == .desktop ? "Desktop" : "Handheld")
                     .font(.caption2.weight(.semibold))

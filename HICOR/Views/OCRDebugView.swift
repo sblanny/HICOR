@@ -33,7 +33,7 @@ struct OCRDebugView: View {
     private func photoCard(_ entry: OCRDebugSnapshot.Entry) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Photo \(entry.photoIndex + 1)")
+                Text("Printout \(entry.photoIndex + 1)")
                     .font(.headline)
                 Spacer()
                 Text("Chosen: \(entry.chosenStrategy)")

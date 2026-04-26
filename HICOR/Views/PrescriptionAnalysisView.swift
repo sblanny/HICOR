@@ -81,7 +81,7 @@ struct PrescriptionAnalysisView: View {
 
                     pdCard
 
-                    DisclosureGroup("Per-photo readings") {
+                    DisclosureGroup("Per-printout readings") {
                         VStack(alignment: .leading, spacing: 12) {
                             ForEach(Array(results.enumerated()), id: \.offset) { idx, result in
                                 PrintoutReadingsCard(index: idx, result: result)
@@ -288,7 +288,7 @@ struct PrescriptionAnalysisView: View {
     private var manualReviewTable: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Photo").frame(width: 50, alignment: .leading)
+                Text("Printout").frame(width: 60, alignment: .leading)
                 Text("Eye").frame(width: 40, alignment: .leading)
                 Text("SPH").frame(width: 60, alignment: .leading)
                 Text("CYL").frame(width: 60, alignment: .leading)
@@ -300,7 +300,7 @@ struct PrescriptionAnalysisView: View {
             ForEach(Array(results.enumerated()), id: \.offset) { idx, result in
                 ForEach(manualReviewRows(for: result, photoIndex: idx), id: \.id) { row in
                     HStack {
-                        Text("\(row.photoIndex + 1)").frame(width: 50, alignment: .leading)
+                        Text("\(row.photoIndex + 1)").frame(width: 60, alignment: .leading)
                         Text(row.eyeLabel).frame(width: 40, alignment: .leading)
                         Text(DiopterFormatter.format(row.sph)).frame(width: 60, alignment: .leading)
                         Text(row.isSphOnly ? "—" : DiopterFormatter.format(row.cyl)).frame(width: 60, alignment: .leading)
@@ -394,7 +394,7 @@ struct PrescriptionAnalysisView: View {
                 .foregroundStyle(.red)
             ForEach(Array(drops.enumerated()), id: \.offset) { _, dropped in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(dropped.eye == .right ? "Right" : "Left") eye, photo \(dropped.photoIndex + 1)")
+                    Text("\(dropped.eye == .right ? "Right" : "Left") eye, printout \(dropped.photoIndex + 1)")
                         .font(.caption.weight(.semibold))
                     Text(dropped.reason)
                         .font(.caption)

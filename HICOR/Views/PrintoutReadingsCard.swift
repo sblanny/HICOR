@@ -11,7 +11,7 @@ struct PrintoutReadingsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Photo \(index + 1)")
+                Text("Printout \(index + 1)")
                     .font(.headline)
                 Spacer()
                 Text(result.machineType == .desktop ? "Desktop" : "Handheld")
