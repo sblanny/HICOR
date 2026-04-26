@@ -1,6 +1,6 @@
 # MIKE_RX_PROCEDURE.md
 ## Clinical Algorithm for HICOR Prescription Computation
-**Last updated:** April 20, 2026 (comprehensive Q&A with Mike)
+**Last updated:** April 26, 2026 (CYL rounding rule corrected per Highlands Optical inventory)
 **Status:** Authoritative — this document is the source of truth for Phase 5 implementation
 
 ---
@@ -118,7 +118,20 @@ Lenses are available in 0.25 D steps. Final computed values must be rounded to d
 
 **Rationale:** When cylinder is significant, additional spherical magnitude compensates for the cylinder's effect on overall vision. When cylinder is low, under-correcting slightly is more comfortable and avoids over-correction eye strain.
 
-**CYL rounding:** round to nearest 0.25 D step (standard).
+**CYL rounding (Mike, April 26):**
+- Round to nearest 0.50 D step (matches Highlands Optical inventory; lenses are NOT stocked in 0.25 D CYL increments)
+- For values exactly between two 0.50 steps (e.g., -1.75): direction depends on the eye's own SPH magnitude
+  - |SPH| < 3.00 D → round CYL **weaker** (toward zero)
+  - |SPH| ≥ 3.00 D → round CYL **stronger** (away from zero)
+- Each eye decides its own CYL rounding based on its own SPH magnitude (per-eye rule, not whole-prescription)
+
+**Rationale:** When SPH is significant (≥3.00 D), the eye needs substantial total correction; rounding CYL stronger gives adequate astigmatism correction. When SPH is low, over-correcting astigmatism on a mild prescription causes discomfort.
+
+**Examples:**
+- SPH -2.50, computed CYL -1.75 → |SPH| 2.50 < 3.00 → weaker → CYL -1.50
+- SPH -3.00, computed CYL -1.75 → |SPH| 3.00 ≥ 3.00 → stronger → CYL -2.00
+- SPH -5.00, computed CYL -2.25 → |SPH| 5.00 ≥ 3.00 → stronger → CYL -2.50
+- SPH -1.50, computed CYL -2.75 → |SPH| 1.50 < 3.00 → weaker → CYL -2.50
 
 **AX rounding:** round to nearest integer degree (1° precision is industry standard).
 
@@ -259,6 +272,8 @@ static let cylTier2Max: Double = 3.00        // Tier 2 upper bound (absolute)
 
 // Rounding
 static let cylBreakpointForSphRounding: Double = 1.00  // |CYL| > 1.00 rounds up
+static let cylRoundingStep: Double = 0.50              // CYL inventory is 0.50 D steps
+static let sphMagnitudeThresholdForCylRounding: Double = 3.00  // tie direction
 
 // PD aggregation
 static let pdMaxSpreadBeforeManual: Double = 5.0  // mm
@@ -298,11 +313,21 @@ Build test cases from these scenarios:
 - R +1.00, L -1.00 → antimetropia, both within ±1.50 → dispense with 4 printouts
 - R +2.00, L -1.00 → antimetropia, one outside ±1.50 → refer out
 
-**Rounding:**
+**Rounding (SPH):**
 - Computed -2.37 with CYL -0.50 → CYL ≤ 1.00, round to weaker → -2.25
 - Computed -2.37 with CYL -1.50 → CYL > 1.00, round to stronger → -2.50
 - Computed +2.37 with CYL -0.50 → +2.25
 - Computed +2.37 with CYL -1.50 → +2.50
+
+**Rounding (CYL — 0.50 D step, SPH-driven tie direction):**
+- Computed CYL -1.30, SPH -2.00 → clear nearest 0.50 step → -1.50
+- Computed CYL -1.85, SPH -2.00 → clear nearest 0.50 step → -2.00
+- Computed CYL -1.75, SPH -2.50 → tie, |SPH| 2.50 < 3.00, weaker → -1.50
+- Computed CYL -1.75, SPH -3.00 → tie, |SPH| 3.00 ≥ 3.00, stronger → -2.00
+- Computed CYL -2.25, SPH -5.00 → tie, |SPH| 5.00 ≥ 3.00, stronger → -2.50
+- Computed CYL -1.25, SPH -0.50 → tie, |SPH| 0.50 < 3.00, weaker → -1.00
+- Computed CYL -2.75, SPH -1.50 → tie, |SPH| 1.50 < 3.00, weaker → -2.50
+- Computed CYL 0.00 (any SPH) → 0.00 (plano stays plano)
 
 **PD:**
 - PDs 62, 64, 65 → mean 63.67, rounded 64, flag: none
@@ -328,3 +353,4 @@ Build test cases from these scenarios:
   - Rounding rule: CYL-dependent up/down
   - Manual Review Required escalation path (display OCR, consult Mike/Scott)
   - Scope clarification: HICOR ends at prescription display, FileMaker handles dispensing
+- **April 26, 2026** — CYL rounding rule corrected: Highlands Optical inventory does not stock 0.25 D CYL increments, so CYL rounds to nearest 0.50 D step. Tie direction is per-eye, driven by that eye's SPH magnitude (|SPH| ≥ 3.00 → stronger; otherwise weaker).

@@ -51,6 +51,8 @@ enum Constants {
 
     // Rounding (§6)
     static let cylBreakpointForSphRounding: Double = 1.00
+    static let cylRoundingStep: Double = 0.50
+    static let sphMagnitudeThresholdForCylRounding: Double = 3.00
 
     // PD aggregation (§9)
     static let pdMaxSpreadBeforeManual: Double = 5.0  // mm

@@ -60,18 +60,55 @@ final class DiopterRounderTests: XCTestCase {
         XCTAssertEqual(DiopterRounder.roundSph(-2.37, forCyl: 0.50), -2.25, accuracy: 1e-9)
     }
 
-    // MARK: - CYL rounding (nearest 0.25)
+    // MARK: - CYL rounding (0.50 D step, SPH-driven tie direction per §6)
+    // Rule (Mike, April 26): nearest 0.50 D; on a tie (e.g. -1.75 between -1.50 and -2.00),
+    // use the eye's own |SPH| — < 3.00 D rounds weaker, ≥ 3.00 D rounds stronger.
 
-    func testRoundCyl_nearestQuarterStep() {
-        XCTAssertEqual(DiopterRounder.roundCyl(-1.37), -1.25, accuracy: 1e-9)
-        XCTAssertEqual(DiopterRounder.roundCyl(-1.38), -1.50, accuracy: 1e-9)
-        XCTAssertEqual(DiopterRounder.roundCyl(-0.12), 0.0, accuracy: 1e-9)
-        XCTAssertEqual(DiopterRounder.roundCyl(-0.13), -0.25, accuracy: 1e-9)
+    func testCylRoundsToNearestHalfStep_clearWeaker() {
+        // -1.30 is closer to -1.50 than to -1.00? No — |-1.30| = 1.30, lower step 1.00,
+        // upper step 1.50. Dist to lower 0.30, to upper 0.20 → upper (-1.50).
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.30, eyeSphMagnitude: 2.00), -1.50, accuracy: 1e-9)
     }
 
-    func testRoundCyl_alreadyOnQuarterStep_returnsUnchanged() {
-        XCTAssertEqual(DiopterRounder.roundCyl(-1.25), -1.25, accuracy: 1e-9)
-        XCTAssertEqual(DiopterRounder.roundCyl(0.0), 0.0, accuracy: 1e-9)
+    func testCylRoundsToNearestHalfStep_clearStronger() {
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.85, eyeSphMagnitude: 2.00), -2.00, accuracy: 1e-9)
+    }
+
+    func testCylTieRoundsWeakerWhenSphLow() {
+        // -1.75 ties between -1.50 and -2.00. |SPH| 2.50 < 3.00 → weaker.
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.75, eyeSphMagnitude: 2.50), -1.50, accuracy: 1e-9)
+    }
+
+    func testCylTieRoundsStrongerWhenSphHigh() {
+        // -1.75 ties. |SPH| 3.00 is the boundary (≥) → stronger.
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.75, eyeSphMagnitude: 3.00), -2.00, accuracy: 1e-9)
+    }
+
+    func testCylTieRoundsStrongerWhenSphVeryHigh() {
+        // -2.25 ties between -2.00 and -2.50. |SPH| 5.00 ≥ 3.00 → stronger.
+        XCTAssertEqual(DiopterRounder.roundCyl(-2.25, eyeSphMagnitude: 5.00), -2.50, accuracy: 1e-9)
+    }
+
+    func testCylTieRoundsWeakerWhenSphVeryLow() {
+        // -1.25 ties between -1.00 and -1.50. |SPH| 0.50 < 3.00 → weaker.
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.25, eyeSphMagnitude: 0.50), -1.00, accuracy: 1e-9)
+    }
+
+    func testCylAlreadyOnStep_unchanged_lowSph() {
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.50, eyeSphMagnitude: 2.00), -1.50, accuracy: 1e-9)
+    }
+
+    func testCylAlreadyOnStep_unchanged_highSph() {
+        XCTAssertEqual(DiopterRounder.roundCyl(-2.00, eyeSphMagnitude: 5.00), -2.00, accuracy: 1e-9)
+    }
+
+    func testPlanoStaysPlano() {
+        XCTAssertEqual(DiopterRounder.roundCyl(0.00, eyeSphMagnitude: 5.00), 0.00, accuracy: 1e-9)
+    }
+
+    func testCylBoundaryAt300Sph() {
+        // |SPH| 3.00 uses ≥ comparison, so it falls into the stronger branch.
+        XCTAssertEqual(DiopterRounder.roundCyl(-1.75, eyeSphMagnitude: 3.00), -2.00, accuracy: 1e-9)
     }
 
     // MARK: - AX rounding (nearest integer, 1-180 clamp)

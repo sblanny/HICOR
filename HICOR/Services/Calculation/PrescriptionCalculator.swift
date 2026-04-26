@@ -204,7 +204,8 @@ enum PrescriptionCalculator {
         }
 
         let roundedSph = DiopterRounder.roundSph(rawSph, forCyl: rawCyl)
-        let roundedCyl = DiopterRounder.roundCyl(rawCyl)
+        // §6: CYL tie direction is per-eye, driven by this eye's own rounded SPH magnitude.
+        let roundedCyl = DiopterRounder.roundCyl(rawCyl, eyeSphMagnitude: abs(roundedSph))
         let roundedAx = DiopterRounder.roundAx(Double(rawAx))
 
         let perEyeTier = TierAssigner.assignPerEyeTier(sph: roundedSph, cyl: roundedCyl)
