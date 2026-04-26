@@ -158,7 +158,7 @@ struct AnalysisPlaceholderView: View {
                         onReturnToCapture?()
                     },
                     onStartOver: {
-                        NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
+                        NotificationCenter.default.post(name: .hicorReturnToPatientEntry, object: nil)
                     }
                 )
             } else {

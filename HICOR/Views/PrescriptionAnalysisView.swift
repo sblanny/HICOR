@@ -533,10 +533,11 @@ struct PrescriptionAnalysisView: View {
         )
         await sync.save(refraction)
         saving = false
-        NotificationCenter.default.post(name: .hicorReturnToRoot, object: nil)
+        NotificationCenter.default.post(name: .hicorReturnToPatientEntry, object: nil)
     }
 }
 
 extension Notification.Name {
     static let hicorReturnToRoot = Notification.Name("hicor.returnToRoot")
+    static let hicorReturnToPatientEntry = Notification.Name("hicor.returnToPatientEntry")
 }

@@ -60,6 +60,11 @@ struct PatientEntryView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { focused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .hicorReturnToPatientEntry)) { _ in
+            patientNumber = ""
+            navigate = false
+            focused = true
+        }
         .navigationDestination(isPresented: $navigate) {
             PhotoCaptureView(
                 patientNumber: patientNumber,
