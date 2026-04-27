@@ -247,7 +247,7 @@ struct AnalysisPlaceholderView: View {
         let encoded = (try? JSONEncoder().encode(results)) ?? Data()
         let refraction = PatientRefraction(
             patientNumber: patientNumber,
-            sessionDate: sessionContext.date,
+            sessionDate: Date(),
             sessionLocation: sessionContext.location,
             pd: finalPD,
             pdManualEntry: finalPDManualEntry,
@@ -300,7 +300,7 @@ struct AnalysisPlaceholderView: View {
         let encoded = (try? JSONEncoder().encode(snapshot.strippingImages())) ?? Data()
         let failureRecord = PatientRefraction(
             patientNumber: patientNumber,
-            sessionDate: sessionContext.date,
+            sessionDate: Date(),
             sessionLocation: sessionContext.location,
             pd: pd,
             pdManualEntry: pdManualEntry,

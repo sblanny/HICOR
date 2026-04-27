@@ -157,7 +157,7 @@ struct PhotoCaptureView: View {
             Text(sessionContext.location)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text(sessionContext.date, style: .date)
+            Text(Date(), style: .date)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

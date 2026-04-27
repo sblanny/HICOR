@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SessionSetupView: View {
     let sessionContext: SessionContext
-    @State private var date: Date = Date()
     @State private var location: String = ""
     @State private var navigate = false
     @State private var showHistory = false
@@ -31,20 +30,28 @@ struct SessionSetupView: View {
 
                 Spacer()
 
-                Form {
-                    Section {
-                        DatePicker("Session date", selection: $date, displayedComponents: .date)
-                            .datePickerStyle(.compact)
-                        TextField("e.g. San Quintin, Baja California", text: $location)
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Today")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(Date(), style: .date)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
                     }
+                    .padding(.horizontal)
+                    .padding(.vertical, 10)
+                    .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
+
+                    TextField("e.g. San Quintin, Baja California", text: $location)
+                        .textFieldStyle(.roundedBorder)
                 }
-                .scrollContentBackground(.hidden)
-                .frame(maxHeight: 200)
+                .padding(.horizontal)
 
                 Button {
-                    sessionContext.date = date
                     sessionContext.location = location
-                    let settings = SessionSettings(lastDate: date, lastLocation: location)
+                    let settings = SessionSettings(lastLocation: location)
                     settings.save()
                     navigate = true
                 } label: {
@@ -63,7 +70,6 @@ struct SessionSetupView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             let settings = SessionSettings.load()
-            date = settings.lastDate
             location = settings.lastLocation
         }
         .navigationDestination(isPresented: $navigate) {
@@ -73,7 +79,7 @@ struct SessionSetupView: View {
             NavigationStack {
                 HistoryListView(
                     location: sessionContext.location.isEmpty ? location : sessionContext.location,
-                    date: sessionContext.location.isEmpty ? date : sessionContext.date
+                    date: Date()
                 )
             }
         }

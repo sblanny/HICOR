@@ -3,11 +3,11 @@ import Observation
 
 @Observable
 final class SessionContext {
-    var date: Date
+    let sessionStartDate: Date
     var location: String
 
-    init(date: Date = Date(), location: String = "") {
-        self.date = date
+    init(sessionStartDate: Date = Date(), location: String = "") {
+        self.sessionStartDate = sessionStartDate
         self.location = location
     }
 }

@@ -522,6 +522,10 @@ struct PrescriptionAnalysisView: View {
 
     private func save() async {
         saving = true
+        // Source of truth for the patient's session date is the system clock
+        // at save time, not whatever was on SessionContext when Trip Setup
+        // began. Captures crossing midnight stay correctly tagged.
+        refraction.sessionDate = Date()
         refraction.apply(
             outcome: finalOutcome,
             patientNotifiedTier2: finalOutcome.overallTier == .tier2StretchWithNotification

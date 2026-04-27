@@ -21,6 +21,27 @@ final class PatientRefractionTests: XCTestCase {
         XCTAssertNil(p.cloudKitRecordID)
     }
 
+    // The save flow now overwrites sessionDate with Date() at the moment
+    // of persistence so a patient captured after midnight gets tagged with
+    // the correct calendar day, regardless of what was on SessionContext
+    // when Trip Setup began. This test pins that contract: even if the
+    // refraction was constructed with a stale session date, reassigning
+    // sessionDate = Date() (what PrescriptionAnalysisView.save does) lands
+    // within 1s of "now."
+    func testPatientSaveUsesSystemDateNotSessionDate() {
+        let staleDate = Date(timeIntervalSinceNow: -86_400) // yesterday
+        let p = PatientRefraction(
+            patientNumber: "001",
+            sessionDate: staleDate,
+            sessionLocation: "Test"
+        )
+        XCTAssertEqual(p.sessionDate, staleDate)
+
+        p.sessionDate = Date()
+
+        XCTAssertLessThan(abs(p.sessionDate.timeIntervalSinceNow), 1.0)
+    }
+
     func testInsertAndFetchInMemoryContainer() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: PatientRefraction.self, configurations: config)

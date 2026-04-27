@@ -21,7 +21,7 @@ struct PatientEntryView: View {
                     Text(sessionContext.location)
                         .font(.headline)
                         .foregroundStyle(.secondary)
-                    Text(sessionContext.date, style: .date)
+                    Text(Date(), style: .date)
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }

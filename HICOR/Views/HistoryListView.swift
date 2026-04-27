@@ -22,7 +22,7 @@ struct HistoryListView: View {
 
     init(sessionContext: SessionContext) {
         self.location = sessionContext.location
-        _selectedDate = State(initialValue: sessionContext.date)
+        _selectedDate = State(initialValue: Date())
     }
 
     var body: some View {

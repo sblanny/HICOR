@@ -17,16 +17,13 @@ final class SessionSettingsTests: XCTestCase {
     func testLoadReturnsDefaultsWhenEmpty() {
         let settings = SessionSettings.load(from: defaults)
         XCTAssertEqual(settings.lastLocation, "")
-        XCTAssertLessThan(abs(settings.lastDate.timeIntervalSinceNow), 5)
     }
 
     func testSaveAndLoadRoundTrip() {
-        let date = Date(timeIntervalSince1970: 1_700_000_000)
-        let settings = SessionSettings(lastDate: date, lastLocation: "San Quintin")
+        let settings = SessionSettings(lastLocation: "San Quintin")
         settings.save(to: defaults)
 
         let loaded = SessionSettings.load(from: defaults)
-        XCTAssertEqual(loaded.lastDate, date)
         XCTAssertEqual(loaded.lastLocation, "San Quintin")
     }
 }
