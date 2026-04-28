@@ -44,19 +44,29 @@ struct PatientEntryView: View {
                 }
 
                 Spacer()
-
-                Button {
-                    navigate = true
-                } label: {
-                    Text("Begin Refraction")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(patientNumber.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding()
+        }
+        // Pin Begin Refraction above the keyboard. Without safeAreaInset the
+        // button gets clipped by the numeric pad on return-to-PatientEntry —
+        // SwiftUI's default keyboard avoidance leaves the Spacer-bracketed
+        // button stack reaching below the keyboard's top edge with no way
+        // for the operator to scroll or dismiss. Mirrors the pattern in
+        // PrescriptionAnalysisView for the Save button.
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                navigate = true
+            } label: {
+                Text("Begin Refraction")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(patientNumber.trimmingCharacters(in: .whitespaces).isEmpty)
+            .padding(.horizontal)
+            .padding(.bottom, 12)
+            .background(.background)
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { focused = true }
