@@ -16,7 +16,11 @@ struct PatientEntryView: View {
                 onChangeLocation: { changeLocationTapped() },
                 onShowAbout: { showAbout = true }
             )
-            VStack(spacing: 24) {
+            // Stack content at the top so the numeric keypad at the bottom
+            // never overlaps the action button — independent of SwiftUI's
+            // keyboard avoidance behavior, which proved unreliable across
+            // navigation re-entry on this layout.
+            VStack(spacing: 20) {
                 VStack(spacing: 4) {
                     Text(sessionContext.location)
                         .font(.headline)
@@ -25,9 +29,6 @@ struct PatientEntryView: View {
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }
-                .padding(.top)
-
-                Spacer()
 
                 VStack(spacing: 8) {
                     Text("Patient Number")
@@ -43,27 +44,20 @@ struct PatientEntryView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
                 }
 
+                Button {
+                    navigate = true
+                } label: {
+                    Text("Begin Refraction")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(patientNumber.trimmingCharacters(in: .whitespaces).isEmpty)
+
                 Spacer()
             }
             .padding()
-        }
-        // Pin Begin Refraction above the keyboard via safeAreaInset so the
-        // numeric keypad (which has no Return key) doesn't trap the
-        // operator with no visible way to proceed.
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                navigate = true
-            } label: {
-                Text("Begin Refraction")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(patientNumber.trimmingCharacters(in: .whitespaces).isEmpty)
-            .padding(.horizontal)
-            .padding(.bottom, 12)
-            .background(.background)
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { focused = true }
