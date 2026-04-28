@@ -47,12 +47,12 @@ struct PatientEntryView: View {
             }
             .padding()
         }
-        // Pin Begin Refraction above the keyboard. Without safeAreaInset the
-        // button gets clipped by the numeric pad on return-to-PatientEntry —
-        // SwiftUI's default keyboard avoidance leaves the Spacer-bracketed
-        // button stack reaching below the keyboard's top edge with no way
-        // for the operator to scroll or dismiss. Mirrors the pattern in
-        // PrescriptionAnalysisView for the Save button.
+        // Numeric keypads have no Return key, so the operator can't dismiss
+        // the keyboard to reach a bottom-of-screen button (.safeAreaInset
+        // also failed to lift above the keypad in this layout). Put the
+        // primary action directly in the keyboard accessory toolbar — one
+        // tap proceeds without forcing a dismiss-then-tap dance — and keep
+        // a fallback button at the bottom for the no-keyboard state.
         .safeAreaInset(edge: .bottom) {
             Button {
                 navigate = true
@@ -67,6 +67,19 @@ struct PatientEntryView: View {
             .padding(.horizontal)
             .padding(.bottom, 12)
             .background(.background)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button {
+                    focused = false
+                    navigate = true
+                } label: {
+                    Text("Begin Refraction")
+                        .fontWeight(.semibold)
+                }
+                .disabled(patientNumber.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { focused = true }
