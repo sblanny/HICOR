@@ -1,6 +1,6 @@
 # MIKE_RX_PROCEDURE.md
 ## Clinical Algorithm for HICOR Prescription Computation
-**Last updated:** April 26, 2026 (CYL rounding rule corrected per Highlands Optical inventory)
+**Last updated:** April 28, 2026 (escalation threshold matched to implementation: Manual Review fires at 5 printouts, not 4)
 **Status:** Authoritative — this document is the source of truth for Phase 5 implementation
 
 ---
@@ -51,7 +51,8 @@ Mike estimates 10-25% of patients will be referred out. UI tone must treat this 
 **When readings disagree:**
 - 2 printouts disagreeing on SPH or CYL → require 3rd printout
 - 3 printouts still disagreeing → require 4th
-- 4 printouts with fewer than 2 agreeing → **escalate to Manual Review Required**
+- 4 printouts still disagreeing → require 5th
+- 5 printouts with fewer than 2 agreeing → **escalate to Manual Review Required**
 
 ### Section 2: AXIS Agreement — Sliding Scale by CYL Magnitude
 
@@ -97,10 +98,11 @@ The autorefractor prints individual readings plus an AVG line. Mike trusts the A
 - 2 printouts disagreeing → take a 3rd
 - 3 printouts with 2 agreeing and 1 outlier → trust the 2 agreeing readings, surface the outlier on screen
 - 3 printouts all disagreeing → take a 4th
-- 4 printouts with fewer than 2 agreeing → **Manual Review Required**
+- 4 printouts still disagreeing → take a 5th
+- 5 printouts with fewer than 2 agreeing → **Manual Review Required**
 
 **Manual Review Required flow:**
-- App displays all 4 OCR readouts in a clear table on screen
+- App displays all OCR readouts in a clear table on screen
 - Banner: "Manual Review Required — Consult Mike or Scott"
 - Mike or Scott examines the screen alongside the physical printouts
 - They decide the prescription manually and enter it directly into FileMaker
@@ -278,9 +280,9 @@ static let sphMagnitudeThresholdForCylRounding: Double = 3.00  // tie direction
 // PD aggregation
 static let pdMaxSpreadBeforeManual: Double = 5.0  // mm
 
-// Manual review escalation
-static let minReadingsAgreementForTrust: Int = 2
-static let escalationPrintoutCount: Int = 4
+// Manual review escalation: ConsistencyValidator returns
+// `.inconsistentEscalate` when the printout count reaches
+// `Constants.maxPrintoutsAllowed` (5) without 2+ printouts agreeing.
 ```
 
 ---
@@ -293,7 +295,7 @@ Build test cases from these scenarios:
 - 2 printouts agreeing within 0.50 D → consistent, use AVG
 - 2 printouts differing by 1.50 D → require 3rd
 - 3 printouts: -2.00, -2.25, -4.50 with AVG -2.25 → trust AVG (Mike's example)
-- 4 printouts all disagreeing → Manual Review Required
+- 5 printouts all disagreeing → Manual Review Required
 
 **Axis:**
 - CYL -0.25, axis 10° vs 35° → 25° difference, within 30° tolerance → consistent
@@ -354,3 +356,4 @@ Build test cases from these scenarios:
   - Manual Review Required escalation path (display OCR, consult Mike/Scott)
   - Scope clarification: HICOR ends at prescription display, FileMaker handles dispensing
 - **April 26, 2026** — CYL rounding rule corrected: Highlands Optical inventory does not stock 0.25 D CYL increments, so CYL rounds to nearest 0.50 D step. Tie direction is per-eye, driven by that eye's SPH magnitude (|SPH| ≥ 3.00 → stronger; otherwise weaker).
+- **April 28, 2026** — Escalation threshold updated to match implementation. `ConsistencyValidator` fires `.inconsistentEscalate` at `Constants.maxPrintoutsAllowed` (5), not 4. Document was previously stale on this. Behavior unchanged; doc now matches code. See `AUDIT_2026-04-27.md`.

@@ -7,8 +7,7 @@ final class SaveGatingTests: XCTestCase {
     // SwiftUI binding lives in the view.
 
     private func outcome(
-        tier: DispensingTier,
-        manualReview: Bool = false
+        tier: DispensingTier
     ) -> PrescriptionCalculationOutcome {
         PrescriptionCalculationOutcome(
             rightEye: nil,
@@ -16,8 +15,7 @@ final class SaveGatingTests: XCTestCase {
             overallTier: tier,
             clinicalFlags: [],
             pd: PDAggregator.aggregate(pds: []),
-            upstreamDroppedOutliers: [],
-            requiresManualReview: manualReview
+            upstreamDroppedOutliers: []
         )
     }
 
@@ -101,14 +99,4 @@ final class SaveGatingTests: XCTestCase {
         XCTAssertTrue(state.enabled)
     }
 
-    // MARK: - Manual review: always enabled (save records flag)
-
-    func test_manualReview_enabled() {
-        let state = SaveGate.evaluate(
-            outcome: outcome(tier: .tier1Normal, manualReview: true),
-            patientNotifiedTier2: false,
-            tier0Decision: .indeterminate
-        )
-        XCTAssertTrue(state.enabled)
-    }
 }

@@ -40,7 +40,6 @@ final class PatientRefraction {
     var clinicalFlagsJSON: Data
     var pdSource: String?
     var pdSpread: Double
-    var manualReviewRequired: Bool
     var noGlassesReason: String?
     // nil = not a Tier 2 case; true = operator confirmed notification;
     // false = Tier 2 saved without confirmation (edge case, UI gate bypassed).
@@ -76,7 +75,6 @@ final class PatientRefraction {
         clinicalFlagsJSON: Data = Data(),
         pdSource: String? = nil,
         pdSpread: Double = 0,
-        manualReviewRequired: Bool = false,
         noGlassesReason: String? = nil,
         patientNotifiedTier2: Bool? = nil
     ) {
@@ -109,7 +107,6 @@ final class PatientRefraction {
         self.clinicalFlagsJSON = clinicalFlagsJSON
         self.pdSource = pdSource
         self.pdSpread = pdSpread
-        self.manualReviewRequired = manualReviewRequired
         self.noGlassesReason = noGlassesReason
         self.patientNotifiedTier2 = patientNotifiedTier2
     }
@@ -139,7 +136,6 @@ final class PatientRefraction {
         tier0Decision: Tier0SymptomCheck.Decision?
     ) {
         self.dispensingTier = outcome.overallTier.rawValue
-        self.manualReviewRequired = outcome.requiresManualReview
 
         if let right = outcome.rightEye {
             self.odSPH = right.sph

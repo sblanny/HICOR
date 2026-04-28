@@ -132,13 +132,6 @@ struct PatientDetailView: View {
     @ViewBuilder
     private var acceptanceStatusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if refraction.manualReviewRequired {
-                statusBanner(
-                    icon: "exclamationmark.octagon.fill",
-                    tint: .red,
-                    text: "Manual review required"
-                )
-            }
             if let tier2Notified = refraction.patientNotifiedTier2 {
                 if tier2Notified {
                     statusBanner(

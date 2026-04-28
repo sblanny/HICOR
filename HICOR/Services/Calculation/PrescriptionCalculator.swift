@@ -19,7 +19,6 @@ struct PrescriptionCalculationOutcome: Equatable {
     let clinicalFlags: [ClinicalFlag]
     let pd: PDAggregator.Aggregate
     let upstreamDroppedOutliers: [ConsistencyValidator.DroppedReading]
-    let requiresManualReview: Bool
 }
 
 enum PrescriptionCalculator {
@@ -118,8 +117,7 @@ enum PrescriptionCalculator {
             overallTier: overall,
             clinicalFlags: flags,
             pd: pdAggregate,
-            upstreamDroppedOutliers: upstreamDroppedOutliers,
-            requiresManualReview: false
+            upstreamDroppedOutliers: upstreamDroppedOutliers
         )
     }
 

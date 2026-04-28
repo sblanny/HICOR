@@ -61,17 +61,13 @@ struct PrescriptionAnalysisView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header
 
-                    if finalOutcome.requiresManualReview {
-                        manualReviewSection
-                    } else {
-                        tierBanner
-                        if finalOutcome.overallTier == .tier0NoGlassesNeeded {
-                            tier0SymptomSection
-                        }
-                        finalPrescriptionCard
-                        if tierPresentation.requiresPatientNotifiedAcknowledgement {
-                            tier2AcknowledgeSection
-                        }
+                    tierBanner
+                    if finalOutcome.overallTier == .tier0NoGlassesNeeded {
+                        tier0SymptomSection
+                    }
+                    finalPrescriptionCard
+                    if tierPresentation.requiresPatientNotifiedAcknowledgement {
+                        tier2AcknowledgeSection
                     }
 
                     if !finalOutcome.clinicalFlags.isEmpty {
@@ -275,83 +271,6 @@ struct PrescriptionAnalysisView: View {
         )
     }
 
-    // MARK: - Manual review
-
-    private var manualReviewSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Manual review required", systemImage: "exclamationmark.octagon.fill")
-                .font(.headline)
-                .foregroundStyle(.red)
-            Text("The calculator could not produce a final prescription automatically. Compare the readouts below before deciding how to proceed.")
-                .font(.subheadline)
-            manualReviewTable
-        }
-        .padding()
-        .background(Color.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.red.opacity(0.4), lineWidth: 1)
-        )
-    }
-
-    private var manualReviewTable: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Printout").frame(width: 60, alignment: .leading)
-                Text("Eye").frame(width: 40, alignment: .leading)
-                Text("SPH").frame(width: 60, alignment: .leading)
-                Text("CYL").frame(width: 60, alignment: .leading)
-                Text("AX").frame(width: 40, alignment: .leading)
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-
-            ForEach(Array(results.enumerated()), id: \.offset) { idx, result in
-                ForEach(manualReviewRows(for: result, photoIndex: idx), id: \.id) { row in
-                    HStack {
-                        Text("\(row.photoIndex + 1)").frame(width: 60, alignment: .leading)
-                        Text(row.eyeLabel).frame(width: 40, alignment: .leading)
-                        Text(DiopterFormatter.format(row.sph)).frame(width: 60, alignment: .leading)
-                        Text(row.isSphOnly ? "—" : DiopterFormatter.format(row.cyl)).frame(width: 60, alignment: .leading)
-                        Text(row.isSphOnly ? "—" : DiopterFormatter.formatAxis(row.ax)).frame(width: 40, alignment: .leading)
-                    }
-                    .font(.system(.caption, design: .monospaced))
-                }
-            }
-        }
-    }
-
-    private struct ManualReviewRow {
-        let id: UUID
-        let photoIndex: Int
-        let eyeLabel: String
-        let sph: Double
-        let cyl: Double
-        let ax: Int
-        let isSphOnly: Bool
-    }
-
-    private func manualReviewRows(for result: PrintoutResult, photoIndex: Int) -> [ManualReviewRow] {
-        var rows: [ManualReviewRow] = []
-        if let r = result.rightEye {
-            for reading in r.readings {
-                rows.append(ManualReviewRow(
-                    id: reading.id, photoIndex: photoIndex, eyeLabel: "OD",
-                    sph: reading.sph, cyl: reading.cyl, ax: reading.ax, isSphOnly: reading.isSphOnly
-                ))
-            }
-        }
-        if let l = result.leftEye {
-            for reading in l.readings {
-                rows.append(ManualReviewRow(
-                    id: reading.id, photoIndex: photoIndex, eyeLabel: "OS",
-                    sph: reading.sph, cyl: reading.cyl, ax: reading.ax, isSphOnly: reading.isSphOnly
-                ))
-            }
-        }
-        return rows
-    }
-
     // MARK: - Clinical flags
 
     private var clinicalFlagsSection: some View {
@@ -502,7 +421,6 @@ struct PrescriptionAnalysisView: View {
     }
 
     private var saveButtonTitle: String {
-        if finalOutcome.requiresManualReview { return "Save for manual review" }
         switch finalOutcome.overallTier {
         case .tier3DoNotDispense, .tier4MedicalConcern:
             return "Save referral & return"

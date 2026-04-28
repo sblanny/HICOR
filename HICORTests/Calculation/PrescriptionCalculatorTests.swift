@@ -27,7 +27,6 @@ final class PrescriptionCalculatorTests: XCTestCase {
         XCTAssertEqual(outcome.overallTier, .tier1Normal)
         XCTAssertEqual(outcome.rightEye?.sph ?? 0, -2.00, accuracy: 0.01)
         XCTAssertEqual(outcome.leftEye?.sph ?? 0, -1.50, accuracy: 0.01)
-        XCTAssertFalse(outcome.requiresManualReview)
         XCTAssertTrue(
             outcome.clinicalFlags.allSatisfy {
                 if case .pdMeasurementRequired = $0 { return false }

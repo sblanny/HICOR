@@ -56,10 +56,6 @@ enum Constants {
 
     // PD aggregation (§9)
     static let pdMaxSpreadBeforeManual: Double = 5.0  // mm
-
-    // Manual review escalation (§5)
-    static let minReadingsAgreementForTrust: Int = 2
-    static let escalationPrintoutCount: Int = 4
 }
 
 enum Eye: String, Codable, Equatable, CaseIterable {

@@ -51,7 +51,6 @@ final class PatientRefractionPhase5PersistenceTests: XCTestCase {
     private func outcome(
         tier: DispensingTier,
         clinicalFlags: [ClinicalFlag] = [],
-        manualReview: Bool = false,
         pdValues: [Double] = [62.0, 62.0]
     ) -> PrescriptionCalculationOutcome {
         PrescriptionCalculationOutcome(
@@ -60,8 +59,7 @@ final class PatientRefractionPhase5PersistenceTests: XCTestCase {
             overallTier: tier,
             clinicalFlags: clinicalFlags,
             pd: PDAggregator.aggregate(pds: pdValues),
-            upstreamDroppedOutliers: [],
-            requiresManualReview: manualReview
+            upstreamDroppedOutliers: []
         )
     }
 
@@ -115,7 +113,6 @@ final class PatientRefractionPhase5PersistenceTests: XCTestCase {
         XCTAssertEqual(r.pdSpread, 0.0, accuracy: 1e-9)
         XCTAssertEqual(r.finalRightSource, PrescriptionSource.machineAvgValidated.rawValue)
         XCTAssertEqual(r.finalLeftSource, PrescriptionSource.recomputedViaPowerVector.rawValue)
-        XCTAssertFalse(r.manualReviewRequired)
         XCTAssertNil(r.noGlassesReason)
         // Not Tier 2 — acknowledgement field stays nil.
         XCTAssertNil(r.patientNotifiedTier2)
@@ -209,17 +206,6 @@ final class PatientRefractionPhase5PersistenceTests: XCTestCase {
         XCTAssertEqual(r.dispensingTier, DispensingTier.tier4MedicalConcern.rawValue)
     }
 
-    // MARK: - Manual review
-
-    func test_manualReview_persistsFlag() throws {
-        let o = outcome(tier: .tier1Normal, manualReview: true)
-        let refraction = newRefraction()
-        refraction.apply(outcome: o, patientNotifiedTier2: nil, tier0Decision: nil)
-
-        let r = try roundtrip(refraction)
-        XCTAssertTrue(r.manualReviewRequired)
-    }
-
     // MARK: - Clinical flags JSON
 
     func test_clinicalFlags_roundtripThroughJson() throws {
@@ -265,8 +251,7 @@ final class PatientRefractionPhase5PersistenceTests: XCTestCase {
             overallTier: .tier1Normal,
             clinicalFlags: [],
             pd: PDAggregator.aggregate(pds: [62.0]),
-            upstreamDroppedOutliers: [upstream],
-            requiresManualReview: false
+            upstreamDroppedOutliers: [upstream]
         )
 
         let refraction = newRefraction()
