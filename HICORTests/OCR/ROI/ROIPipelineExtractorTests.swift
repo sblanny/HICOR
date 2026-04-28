@@ -8,6 +8,22 @@ private struct PassthroughRecognizer: LineRecognizing {
     func recognize(_ image: UIImage) async throws -> [OCRLine] { lines }
 }
 
+/// Returns different OCRLines depending on the image size. Used to simulate
+/// the real-capture failure mode where the standard-enhanced image loses
+/// thin minus-sign strokes that the raw image preserves.
+private struct SizeDispatchRecognizer: LineRecognizing {
+    let rawLines: [OCRLine]
+    let standardLines: [OCRLine]
+    let aggressiveLines: [OCRLine]
+    let standardSize: CGSize
+    let aggressiveSize: CGSize
+    func recognize(_ image: UIImage) async throws -> [OCRLine] {
+        if image.size == standardSize { return standardLines }
+        if image.size == aggressiveSize { return aggressiveLines }
+        return rawLines
+    }
+}
+
 /// Stubs everything the orchestrator calls through: rectifier, enhancer,
 /// anchor detector, per-cell OCR, fallback extractor.
 private final class StubAnchorDetector: AnchorDetector {
@@ -212,6 +228,130 @@ final class ROIPipelineExtractorTests: XCTestCase {
         let text = try await extractor.extractText(from: blankImage())
         XCTAssertEqual(text.rowBased[2], "1.25 -0.25 92")
         XCTAssertEqual(text.rowBased[3], "1.25 -0.25 92")
+    }
+
+    /// Real-capture regression: on dim thermal prints, the standard
+    /// enhancement variant (gamma 0.7 + contrast 1.3 + unsharp) erases the
+    /// thin "-" strokes printed in a sign column to the left of each SPH
+    /// value. The standard variant typically wins on overall digit-recognition
+    /// quality, so without intervention `applySignConventions` runs against
+    /// sign-stripped lines and the values come out positive. This test
+    /// asserts that sign reconciliation runs against the un-enhanced raw
+    /// image's lines (which preserve the strokes), so the final values are
+    /// signed correctly even when the winning variant lacks them.
+    func testStandardVariantWithMissingSignsRecoversFromRawLines() async throws {
+        let anchors = columnSpacedAnchors()
+        let cells = CellLayout.grk6000Desktop.cells(given: anchors)
+        let rawSize = CGSize(width: 1500, height: 1100)
+        let standardSize = CGSize(width: 1500, height: 1101)
+        let aggressiveSize = CGSize(width: 1500, height: 1102)
+        let rawImage = solidImage(size: rawSize)
+        let standardImage = solidImage(size: standardSize)
+        let aggressiveImage = solidImage(size: aggressiveSize)
+
+        // Picker source: numeric values centered on each cell. Right eye SPH
+        // is positive (2.50), left eye SPH is the value we want to recover as
+        // negative ("2.00" with a separate "-" only present in rawLines).
+        let valueLines = cells.map { cell -> OCRLine in
+            let value: String
+            switch (cell.eye, cell.column) {
+            case (.right, .sph): value = "2.50"
+            case (.right, .cyl): value = "1.00"
+            case (.right, .ax):  value = "13"
+            case (.left,  .sph): value = "2.00"
+            case (.left,  .cyl): value = "1.75"
+            case (.left,  .ax):  value = "172"
+            }
+            return OCRLine(
+                text: value,
+                frame: CGRect(
+                    x: cell.rect.midX - 30,
+                    y: cell.rect.midY - 15,
+                    width: 60,
+                    height: 30
+                )
+            )
+        }
+
+        // Raw-only addition: isolated "-" glyphs in the sign column to the
+        // left of each LEFT eye SPH cell. Place them inside adjacentSign's
+        // search window (one cell-width to the left of cell.rect.minX) but
+        // outside pickCellValues' wideRect (cell.rect ± 30%) so they don't
+        // alter the picked numeric value.
+        let leftSPHCells = cells.filter { $0.eye == .left && $0.column == .sph }
+        let signLines = leftSPHCells.map { cell in
+            OCRLine(
+                text: "-",
+                frame: CGRect(
+                    x: cell.rect.minX - cell.rect.width * 0.5 - 5,
+                    y: cell.rect.midY - 3,
+                    width: 10,
+                    height: 6
+                )
+            )
+        }
+
+        let recognizer = SizeDispatchRecognizer(
+            rawLines: valueLines + signLines,
+            standardLines: valueLines,
+            aggressiveLines: valueLines,
+            standardSize: standardSize,
+            aggressiveSize: aggressiveSize
+        )
+
+        let extractor = ROIPipelineExtractor(
+            rectify: { $0 },
+            enhance: { _, strength in
+                switch strength {
+                case .standard: return standardImage
+                case .aggressive: return aggressiveImage
+                }
+            },
+            lineRecognizer: recognizer,
+            anchorDetector: StubAnchorDetector(result: .success(anchors)),
+            cellOCR: ScriptedCellOCR(table: [:]),
+            fallback: StubFallback(output: .empty)
+        )
+
+        let text = try await extractor.extractText(from: rawImage)
+
+        // Right eye stays positive (no "-" glyphs in rawLines for that eye).
+        XCTAssertTrue(text.rowBased.contains("[R]"))
+        XCTAssertTrue(text.rowBased.contains("2.50 -1.00 13"))
+        XCTAssertTrue(text.rowBased.contains("AVG 2.50 -1.00 13"))
+
+        // Left eye SPH must come out negative on every row including AVG —
+        // even though the standard variant's lines (which won the picking)
+        // contained no "-" glyphs at all.
+        XCTAssertTrue(text.rowBased.contains("[L]"))
+        XCTAssertTrue(text.rowBased.contains("-2.00 -1.75 172"))
+        XCTAssertTrue(text.rowBased.contains("AVG -2.00 -1.75 172"))
+    }
+
+    private func solidImage(size: CGSize) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+    }
+
+    /// Anchors with SPH/CYL/AX headers spaced across X so each column's
+    /// cells live in a distinct horizontal band — required for picker tests
+    /// that exercise per-column line filtering.
+    private func columnSpacedAnchors() -> Anchors {
+        let right = SectionAnchors(
+            eyeMarker: CGRect(x: 1340, y:  60, width: 60, height: 60),
+            sph: CGRect(x: 100, y: 100, width: 80, height: 60),
+            cyl: CGRect(x: 250, y: 100, width: 80, height: 60),
+            ax:  CGRect(x: 400, y: 100, width: 80, height: 60),
+            avg: CGRect(x: 100, y: 520, width: 80, height: 60))
+        let left = SectionAnchors(
+            eyeMarker: CGRect(x: 1340, y: 640, width: 60, height: 60),
+            sph: CGRect(x: 100, y: 680, width: 80, height: 60),
+            cyl: CGRect(x: 250, y: 680, width: 80, height: 60),
+            ax:  CGRect(x: 400, y: 680, width: 80, height: 60),
+            avg: CGRect(x: 100, y: 1040, width: 80, height: 60))
+        return Anchors(right: right, left: left)
     }
 
     func testSectionSignInferenceUsesStrongConsensusOnly() async throws {

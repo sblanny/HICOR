@@ -82,6 +82,14 @@ final class ROIPipelineExtractor: TextExtracting {
         let oriented = orientSlipToPortrait(image)
         OCRLog.logger.info("ROI input size=\(image.size.width, privacy: .public)x\(image.size.height, privacy: .public) orient=\(image.imageOrientation.rawValue, privacy: .public)")
 
+        // Recognize lines on the raw (un-enhanced) image once. The standard
+        // variant's gamma+contrast+unsharp stack can fade ~2 px-tall minus
+        // strokes below ML Kit's detection threshold, so sign reconciliation
+        // runs against these raw lines (preserved strokes) regardless of
+        // which variant wins on digit recognition. Raw variant reuses these
+        // lines too — see extractCellValues(fromVariantImage:…).
+        let rawLines = try await lineRecognizer.recognize(oriented)
+
         let variants: [(name: String, image: UIImage)] = [
             ("standard", enhance(oriented, .standard)),
             ("raw", oriented),
@@ -93,7 +101,7 @@ final class ROIPipelineExtractor: TextExtracting {
 
         for variant in variants {
             do {
-                let partial = try await extractCellValues(fromVariantImage: variant.image, rawImage: oriented, variantName: variant.name)
+                let partial = try await extractCellValues(fromVariantImage: variant.image, rawImage: oriented, variantName: variant.name, rawLines: rawLines)
                 let attempt = VariantAttempt(name: variant.name, partial: partial)
                 if shouldPrefer(attempt, over: bestAttempt) {
                     bestAttempt = attempt
@@ -413,11 +421,19 @@ final class ROIPipelineExtractor: TextExtracting {
     private func extractCellValues(
         fromVariantImage variantImage: UIImage,
         rawImage: UIImage,
-        variantName: String
+        variantName: String,
+        rawLines: [OCRLine]
     ) async throws -> PartialCellExtraction {
         saveDebugImage(variantImage, label: variantName)
 
-        let lines = try await lineRecognizer.recognize(variantImage)
+        // The raw variant's image is the un-enhanced image already recognized
+        // at the outer call site; reuse those lines instead of re-running OCR.
+        let lines: [OCRLine]
+        if variantName == "raw" {
+            lines = rawLines
+        } else {
+            lines = try await lineRecognizer.recognize(variantImage)
+        }
         OCRLog.logger.info("ROI variant=\(variantName, privacy: .public) lines recognized: \(lines.count, privacy: .public)")
         for (i, line) in lines.enumerated() {
             OCRLog.logger.info("ROI \(variantName, privacy: .public) line[\(i, privacy: .public)] \"\(line.text, privacy: .public)\" x=\(Int(line.frame.midX), privacy: .public) y=\(Int(line.frame.midY), privacy: .public) w=\(Int(line.frame.width), privacy: .public) h=\(Int(line.frame.height), privacy: .public)")
@@ -473,12 +489,12 @@ final class ROIPipelineExtractor: TextExtracting {
         if !stillMissingAfterVision.isEmpty && variantName != "raw" {
             OCRLog.logger.info("ROI raw-image rescue for cells: \(stillMissingAfterVision.map(self.cellLabel).joined(separator: ", "), privacy: .public)")
             saveDebugImage(rawImage, label: "raw")
-            if let rawLines = try? await VisionLineRecognizer().recognize(rawImage) {
-                OCRLog.logger.info("ROI raw Vision produced \(rawLines.count, privacy: .public) lines")
-                for (i, line) in rawLines.enumerated() {
+            if let visionRawLines = try? await VisionLineRecognizer().recognize(rawImage) {
+                OCRLog.logger.info("ROI raw Vision produced \(visionRawLines.count, privacy: .public) lines")
+                for (i, line) in visionRawLines.enumerated() {
                     OCRLog.logger.info("ROI raw line[\(i, privacy: .public)] \"\(line.text, privacy: .public)\" x=\(Int(line.frame.midX), privacy: .public) y=\(Int(line.frame.midY), privacy: .public)")
                 }
-                let splitRaw = splitMergedDecimalLines(rawLines)
+                let splitRaw = splitMergedDecimalLines(visionRawLines)
                 let (rawPicked, _) = pickCellValues(cells: stillMissingAfterVision, lines: splitRaw)
                 for (cell, value) in rawPicked {
                     values[cell] = value
@@ -487,7 +503,11 @@ final class ROIPipelineExtractor: TextExtracting {
             }
         }
 
-        values = applySignConventions(to: values, cells: cells, lines: lines)
+        // Sign reconciliation runs against rawLines, not the variant's lines:
+        // adjacentSign needs to see the standalone "-" glyphs that enhancement
+        // erases. For the raw variant rawLines == lines, so this is a no-op
+        // there.
+        values = applySignConventions(to: values, cells: cells, lines: rawLines)
         let missing = cells.filter { values[$0] == nil }.map(cellLabel)
         return PartialCellExtraction(
             values: values,
