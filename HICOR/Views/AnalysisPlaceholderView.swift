@@ -128,7 +128,8 @@ struct AnalysisPlaceholderView: View {
                     refraction: payload.refraction,
                     results: payload.results,
                     droppedOutliers: payload.droppedOutliers,
-                    finalOutcome: payload.outcome
+                    finalOutcome: payload.outcome,
+                    onCaptureAdditional: onReturnToCapture
                 )
             } else {
                 VStack(spacing: 12) {

@@ -5,6 +5,13 @@ struct PrescriptionAnalysisView: View {
     let results: [PrintoutResult]
     var droppedOutliers: [ConsistencyValidator.DroppedReading] = []
     let finalOutcome: PrescriptionCalculationOutcome
+    /// Invoked when the operator taps "Capture additional printout."
+    /// Caller pops back to PhotoCaptureView with existing printouts intact
+    /// so a 3rd, 4th, or 5th printout can be added before saving. Same
+    /// closure DisagreementReviewView's onAddAnother uses — the volunteer
+    /// is the final clinical judge, not the algorithm. nil disables the
+    /// affordance (e.g. previews / tests that don't need navigation).
+    var onCaptureAdditional: (() -> Void)? = nil
 
     @Environment(SyncCoordinator.self) private var sync
     @State private var saving = false
@@ -449,6 +456,23 @@ struct PrescriptionAnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
             }
+            // Capture-additional sits above Save & return as a secondary
+            // affordance: the volunteer can always opt in to more data
+            // before committing, regardless of tier. Hidden once the 5-
+            // printout ceiling is reached — there's no more capacity.
+            if canCaptureAdditional {
+                Button {
+                    onCaptureAdditional?()
+                } label: {
+                    Text("Capture additional printout")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.bordered)
+                .disabled(saving)
+                .padding(.horizontal)
+            }
             Button {
                 Task { await save() }
             } label: {
@@ -468,6 +492,13 @@ struct PrescriptionAnalysisView: View {
             .padding(.bottom, 12)
         }
         .background(.background)
+    }
+
+    private var canCaptureAdditional: Bool {
+        CaptureAdditionalGate.isAvailable(
+            printoutCount: results.count,
+            callbackProvided: onCaptureAdditional != nil
+        )
     }
 
     private var saveButtonTitle: String {
