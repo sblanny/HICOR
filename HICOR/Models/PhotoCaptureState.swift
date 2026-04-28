@@ -58,7 +58,7 @@ final class PhotoCaptureState {
     }
 
     var canAnalyze: Bool {
-        printouts.contains { !$0.photos.isEmpty }
+        capturedPrintoutCount >= Constants.minPrintoutsRequired
     }
 
     /// True only when the operator has added ≥1 photo to the current

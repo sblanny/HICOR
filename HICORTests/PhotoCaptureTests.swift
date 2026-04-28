@@ -8,9 +8,41 @@ final class PhotoCaptureTests: XCTestCase {
         XCTAssertFalse(state.canAnalyze)
     }
 
-    func testCanAnalyzeWithOnePhoto() {
+    // Clinical requirement (MIKE_RX_PROCEDURE.md, Constants.minPrintoutsRequired):
+    // 2-5 autorefractor printouts per patient. One printout's worth of photos
+    // is not enough to analyze, no matter how many photos are in it — the
+    // averaging algorithm needs cross-printout data, not just intra-printout
+    // OCR redundancy.
+    func testCannotAnalyzeWithOnlyOnePrintout() {
         let state = PhotoCaptureState()
         state.addPhoto(Data([0x01]))
+        XCTAssertFalse(state.canAnalyze, "1 printout < minPrintoutsRequired")
+
+        // Adding another photo to the SAME printout doesn't lift the gate —
+        // it's printout count that matters, not photo count.
+        state.addPhoto(Data([0x02]))
+        XCTAssertFalse(state.canAnalyze, "Still 1 printout despite 2 photos")
+    }
+
+    func testCanAnalyzeWhenMinimumPrintoutsCaptured() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.finalizeCurrentPrintout()
+        state.addPhoto(Data([0x02]))
+        XCTAssertEqual(state.capturedPrintoutCount, 2)
+        XCTAssertTrue(state.canAnalyze,
+                      "Two printouts (last unfinalized) clears the clinical floor")
+    }
+
+    func testSecondPrintoutCanBeUnfinalizedAndStillAnalyzable() {
+        // The Analyze button's tap handler implicitly finalizes the current
+        // printout — operators don't have to tap ✓ on the last one. So an
+        // unfinalized second printout with at least one photo should count.
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.finalizeCurrentPrintout()
+        state.addPhoto(Data([0x02]))
+        XCTAssertFalse(state.printouts.last?.finalized ?? true)
         XCTAssertTrue(state.canAnalyze)
     }
 
@@ -127,6 +159,8 @@ final class PhotoCaptureTests: XCTestCase {
     func testPDRequiredBlocksCommitUntilEntered() {
         let state = PhotoCaptureState()
         state.addPhoto(Data([0x01]))
+        state.finalizeCurrentPrintout()
+        state.addPhoto(Data([0x02]))
         state.pdManualEntryRequired = true
 
         XCTAssertTrue(state.canAnalyze)
