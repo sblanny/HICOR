@@ -294,7 +294,10 @@ final class OCRService {
         // One merged PrintoutResult per printout group. Tag sourcePhotoIndex
         // with the first photo's index so audit trails refer to the capture
         // that triggered the analysis.
-        let rowBased = assembleRowLinesByIdentity(valuesByIdentity: valuesByIdentity)
+        var rowBased = assembleRowLinesByIdentity(valuesByIdentity: valuesByIdentity)
+        if let consensusPD = consensusPD(perPhoto: perPhoto) {
+            rowBased.append(ROIPipelineExtractor.formatPDLine(consensusPD))
+        }
         let anchorPhotoIndex = perPhoto.first!.index
         guard let parsed = try? PrintoutParser.parse(lines: rowBased, photoIndex: anchorPhotoIndex) else {
             return OCRConsensusResult(
@@ -327,6 +330,30 @@ final class OCRService {
             disagreements: disagreements,
             debugSnapshot: OCRDebugSnapshot(entries: [snapshotEntry], overallError: "")
         )
+    }
+
+    /// PD consensus across photos of the same printout. Mirrors the cell
+    /// vote rule (majority value wins; tie-break to the value whose earliest
+    /// photo came first in capture order) so behavior stays predictable
+    /// across the readings grid and the PD field. Nil PDs don't vote.
+    /// PD lives outside the cell map per Section 9 of the procedure doc:
+    /// per-printout aggregation happens here, cross-printout averaging
+    /// happens in PDAggregator.
+    private func consensusPD(perPhoto: [(index: Int, partial: PartialCellExtraction)]) -> Double? {
+        let votes: [(value: Double, photoIndex: Int)] = perPhoto.compactMap { item in
+            guard let pd = item.partial.pd else { return nil }
+            return (pd, item.index)
+        }
+        guard !votes.isEmpty else { return nil }
+        let groups = Dictionary(grouping: votes, by: \.value)
+        let maxCount = groups.values.map(\.count).max() ?? 0
+        let topGroups = groups.filter { $0.value.count == maxCount }
+        let winner = topGroups.min { lhs, rhs in
+            let lMin = lhs.value.map(\.photoIndex).min() ?? Int.max
+            let rMin = rhs.value.map(\.photoIndex).min() ?? Int.max
+            return lMin < rMin
+        }
+        return winner?.key
     }
 
     /// Identity key for cells that ignores the per-photo rect. Cells of

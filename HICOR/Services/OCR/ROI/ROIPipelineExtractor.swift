@@ -4,11 +4,15 @@ import UIKit
 /// cross-photo consensus path borrows missing cells from other photos
 /// before committing to `incompleteCells`. `missing` lists cell labels
 /// still unresolved after all single-photo rescue stages.
+///
+/// `pd` is sourced from PDLocator running over the raw OCR lines
+/// (PD lives outside the cell grid and can't ride the cell map).
 struct PartialCellExtraction: Equatable {
     let values: [CellROI: String]
     let cells: [CellROI]
     let missing: [String]
     let preprocessedImageData: Data?
+    let pd: Double?
 }
 
 final class ROIPipelineExtractor: TextExtracting {
@@ -56,7 +60,10 @@ final class ROIPipelineExtractor: TextExtracting {
         if !partial.missing.isEmpty {
             throw OCRService.OCRError.incompleteCells(missing: partial.missing)
         }
-        let rowBased = assembleRowLines(values: partial.values)
+        var rowBased = assembleRowLines(values: partial.values)
+        if let pd = partial.pd {
+            rowBased.append(Self.formatPDLine(pd))
+        }
         return ExtractedText(
             rowBased: rowBased,
             columnBased: rowBased,
@@ -65,6 +72,13 @@ final class ROIPipelineExtractor: TextExtracting {
             revisionUsed: 0,
             variant: .raw
         )
+    }
+
+    /// Synthesizes the "PD: NN mm" line that DesktopFormatParser.extractPD
+    /// matches on. Kept private + shared with OCRService consensus assembly
+    /// so the two paths can never drift in formatting.
+    static func formatPDLine(_ pd: Double) -> String {
+        "PD: \(Int(pd.rounded())) mm"
     }
 
     /// Extracts whatever cells this single photo can resolve, without
@@ -509,11 +523,22 @@ final class ROIPipelineExtractor: TextExtracting {
         // there.
         values = applySignConventions(to: values, cells: cells, lines: rawLines)
         let missing = cells.filter { values[$0] == nil }.map(cellLabel)
+
+        // PD lives below the [L] readings table on the GRK-6000 slip and
+        // never makes it into the cell map. Locate it positionally on the
+        // raw (un-enhanced) lines — the standard variant's contrast/unsharp
+        // stack can fade the thin "PD:" / "mm" glyphs below detection.
+        let pd = PDLocator.locate(in: rawLines)
+        if let pd {
+            OCRLog.logger.info("ROI PD locator \(variantName, privacy: .public) = \(pd, privacy: .public)")
+        }
+
         return PartialCellExtraction(
             values: values,
             cells: cells,
             missing: missing,
-            preprocessedImageData: variantImage.jpegData(compressionQuality: 0.85)
+            preprocessedImageData: variantImage.jpegData(compressionQuality: 0.85),
+            pd: pd
         )
     }
 
@@ -547,7 +572,8 @@ final class ROIPipelineExtractor: TextExtracting {
             values: values,
             cells: cells,
             missing: missing,
-            preprocessedImageData: nil
+            preprocessedImageData: nil,
+            pd: printout.pd
         )
     }
 

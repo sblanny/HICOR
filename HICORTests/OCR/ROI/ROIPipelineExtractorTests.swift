@@ -354,6 +354,54 @@ final class ROIPipelineExtractorTests: XCTestCase {
         return Anchors(right: right, left: left)
     }
 
+    /// Real-device regression: the ROI pipeline only extracts SPH/CYL/AX
+    /// reading cells. PD lives outside that grid, so without explicit
+    /// surfacing PD never reaches the parser and the analysis screen
+    /// renders "—" on every capture. This test pins that the locator's
+    /// output is appended to the row-based assembly and that the
+    /// downstream PrintoutParser then extracts a non-nil PD value.
+    func testRowBasedOutputIncludesPDLineWhenLocatorFindsValue() async throws {
+        let anchors = syntheticAnchors()
+        let pdLines = [
+            OCRLine(text: "PD:", frame: CGRect(x: 580, y: 1200, width: 106, height: 60)),
+            OCRLine(text: "59",  frame: CGRect(x: 770, y: 1200, width: 80,  height: 60)),
+            OCRLine(text: "mm",  frame: CGRect(x: 900, y: 1200, width: 80,  height: 50)),
+        ]
+        let extractor = ROIPipelineExtractor(
+            rectify: { $0 },
+            enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(lines: pdLines),
+            anchorDetector: StubAnchorDetector(result: .success(anchors)),
+            cellOCR: ScriptedCellOCR(table: fullCellTable(anchors: anchors)),
+            fallback: StubFallback(output: .empty)
+        )
+
+        let text = try await extractor.extractText(from: blankImage())
+        XCTAssertTrue(text.rowBased.contains("PD: 59 mm"),
+                      "rowBased must carry PD line so DesktopFormatParser.extractPD can match")
+
+        let parsed = try XCTUnwrap(
+            try? PrintoutParser.parse(lines: text.rowBased, photoIndex: 0)
+        )
+        XCTAssertEqual(parsed.pd, 59.0)
+    }
+
+    func testRowBasedOutputOmitsPDLineWhenLocatorFindsNothing() async throws {
+        let anchors = syntheticAnchors()
+        let extractor = ROIPipelineExtractor(
+            rectify: { $0 },
+            enhance: { image, _ in image },
+            lineRecognizer: PassthroughRecognizer(),
+            anchorDetector: StubAnchorDetector(result: .success(anchors)),
+            cellOCR: ScriptedCellOCR(table: fullCellTable(anchors: anchors)),
+            fallback: StubFallback(output: .empty)
+        )
+
+        let text = try await extractor.extractText(from: blankImage())
+        XCTAssertFalse(text.rowBased.contains { $0.contains("PD") },
+                       "no PD detected → no PD line; never inject placeholder")
+    }
+
     func testSectionSignInferenceUsesStrongConsensusOnly() async throws {
         let anchors = syntheticAnchors()
         var table = fullCellTable(anchors: anchors)

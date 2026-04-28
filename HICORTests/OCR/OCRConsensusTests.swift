@@ -159,6 +159,49 @@ final class OCRConsensusTests: XCTestCase {
         XCTAssertFalse(result.disagreements.isEmpty, "Ties still count as disagreements")
     }
 
+    // PD lives outside the cell consensus map and rides on PartialCellExtraction.pd.
+    // Same vote-with-tie-break-earliest rule as cells: most-common winning value
+    // wins; on a tie, the value whose earliest-voting photo came first wins.
+    func testConsensusPicksMajorityPDAcrossPhotos() async {
+        let stub = ConsensusStubExtractor()
+        stub.nextPartials = [
+            Self.makePartial(full: true, pd: 58.0),
+            Self.makePartial(full: true, pd: 59.0),
+            Self.makePartial(full: true, pd: 59.0)
+        ]
+        let service = OCRService(extractor: stub)
+
+        let result = await service.processImagesWithConsensus([UIImage(), UIImage(), UIImage()])
+        XCTAssertEqual(result.perImage.first?.pd, 59.0,
+                       "Two photos at 59 outvote one photo at 58")
+    }
+
+    func testConsensusUsesPDFromOnlyPhotoThatHadIt() async {
+        let stub = ConsensusStubExtractor()
+        stub.nextPartials = [
+            Self.makePartial(full: true, pd: nil),
+            Self.makePartial(full: true, pd: 62.0),
+            Self.makePartial(full: true, pd: nil)
+        ]
+        let service = OCRService(extractor: stub)
+
+        let result = await service.processImagesWithConsensus([UIImage(), UIImage(), UIImage()])
+        XCTAssertEqual(result.perImage.first?.pd, 62.0,
+                       "PD survives when only a subset of photos extracted it")
+    }
+
+    func testConsensusReturnsNilPDWhenNoPhotoHadIt() async {
+        let stub = ConsensusStubExtractor()
+        stub.nextPartials = [
+            Self.makePartial(full: true, pd: nil),
+            Self.makePartial(full: true, pd: nil)
+        ]
+        let service = OCRService(extractor: stub)
+
+        let result = await service.processImagesWithConsensus([UIImage(), UIImage()])
+        XCTAssertNil(result.perImage.first?.pd)
+    }
+
     // MARK: - Fixture helpers
 
     private static func cell(_ eye: CellROI.Eye, _ column: CellROI.Column, _ row: CellROI.Row) -> CellROI {
@@ -189,21 +232,23 @@ final class OCRConsensusTests: XCTestCase {
         return cells
     }
 
-    private static func makePartial(full: Bool) -> PartialCellExtraction {
+    private static func makePartial(full: Bool, pd: Double? = nil) -> PartialCellExtraction {
         PartialCellExtraction(
             values: full ? makeFullValuesMap() : [:],
             cells: makeCatalog(),
             missing: full ? [] : makeCatalog().map { "\($0.eye.rawValue) \($0.column.rawValue) \($0.row.rawValue)" },
-            preprocessedImageData: nil
+            preprocessedImageData: nil,
+            pd: pd
         )
     }
 
-    private static func makePartial(values: [CellROI: String], missing: [String]) -> PartialCellExtraction {
+    private static func makePartial(values: [CellROI: String], missing: [String], pd: Double? = nil) -> PartialCellExtraction {
         PartialCellExtraction(
             values: values,
             cells: makeCatalog(),
             missing: missing,
-            preprocessedImageData: nil
+            preprocessedImageData: nil,
+            pd: pd
         )
     }
 }
