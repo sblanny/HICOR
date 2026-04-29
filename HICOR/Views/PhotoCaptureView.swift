@@ -19,9 +19,6 @@ struct PhotoCaptureView: View {
     @State private var showHistory = false
     @State private var showAbout = false
     @State private var confirmDiscard = false
-    #if DEBUG
-    @State private var showingFixtureCapture = false
-    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -181,24 +178,6 @@ struct PhotoCaptureView: View {
         } message: {
             Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
         }
-        #if DEBUG
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 4) {
-                Toggle("DEBUG: Simulate PD not found", isOn: Binding(
-                    get: { state.pdManualEntryRequired },
-                    set: { state.pdManualEntryRequired = $0 }
-                ))
-                Button("DEBUG: Capture fixture") {
-                    showingFixtureCapture = true
-                }
-            }
-            .font(.caption)
-            .padding(.horizontal)
-        }
-        .sheet(isPresented: $showingFixtureCapture) {
-            FixtureCaptureView()
-        }
-        #endif
     }
 
     private var header: some View {
@@ -286,12 +265,7 @@ struct PhotoCaptureView: View {
                     } label: {
                         Image(systemName: "camera.fill")
                             .font(.title3)
-                            .frame(width: 72, height: 72)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
-                            )
+                            .frame(width: 44, height: 44)
                     }
                     .accessibilityLabel("Capture more photos for Printout \(displayNumber)")
                 }
