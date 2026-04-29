@@ -109,6 +109,185 @@ final class PrescriptionCalculatorTests: XCTestCase {
         XCTAssertEqual(outcome.rightEye?.sph ?? 0, -2.00, accuracy: 0.01)
     }
 
+    func testCalculate_machineAvgRejected_outliersDroppedSourcedAccordingly() {
+        // Three printouts. Raw readings: -2.00, -2.00, -5.00 (last is an
+        // outlier). Synthetic machine AVG SPH ≈ -2.07 → machineM ≈ -2.07.
+        // Unfiltered raw M = (-2.5 + -2.5 + -5.5) / 3 ≈ -3.50.
+        // |machineM − rawM| ≈ 1.43 > 0.50 → recompute. Aggregator drops the
+        // -5.00 outlier, source becomes recomputedWithOutliersDropped.
+        let printouts = [
+            makePrintout(
+                photo: 0,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -2.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 0)
+                    ],
+                    machineAvgSPH: -2.00, machineAvgCYL: -1.00, machineAvgAX: 90,
+                    sourcePhotoIndex: 0, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            ),
+            makePrintout(
+                photo: 1,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -2.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 1)
+                    ],
+                    machineAvgSPH: -2.00, machineAvgCYL: -1.00, machineAvgAX: 90,
+                    sourcePhotoIndex: 1, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            ),
+            makePrintout(
+                photo: 2,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -5.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 2)
+                    ],
+                    machineAvgSPH: -2.20, machineAvgCYL: -1.00, machineAvgAX: 90,
+                    sourcePhotoIndex: 2, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            )
+        ]
+        let outcome = PrescriptionCalculator.calculate(printouts: printouts, upstreamDroppedOutliers: [])
+        XCTAssertEqual(outcome.rightEye?.source, .recomputedWithOutliersDropped)
+        XCTAssertFalse(outcome.rightEye?.machineAvgUsed ?? true)
+        let dropCount = outcome.rightEye?.phase5DroppedOutliers.count ?? 0
+        XCTAssertGreaterThanOrEqual(dropCount, 1)
+    }
+
+    func testCalculate_rawOutlierInsidePrintout_machineAvgNoLongerSilentlyAccepted() {
+        // Regression for the inverted-order bug. Raw: -2.00, -2.00, -5.00.
+        // Per-printout machine AVGs cluster near -2.00 (one slightly pulled
+        // by its outlier reading). Old order: aggregator dropped the -5.00
+        // first, filtered M ≈ -2.50 matched synthetic AVG → AVG silently
+        // accepted. New order: unfiltered raw M ≈ -3.50 is far from the
+        // synthetic AVG → AVG rejected, fallback recomputes WITHOUT the
+        // outlier, and the operator sees the dropped reading.
+        let printouts = [
+            makePrintout(
+                photo: 0,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -2.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 0)
+                    ],
+                    machineAvgSPH: -2.00, machineAvgCYL: -1.00, machineAvgAX: 90,
+                    sourcePhotoIndex: 0, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            ),
+            makePrintout(
+                photo: 1,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -2.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 1)
+                    ],
+                    machineAvgSPH: -2.00, machineAvgCYL: -1.00, machineAvgAX: 90,
+                    sourcePhotoIndex: 1, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            ),
+            makePrintout(
+                photo: 2,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -5.00, cyl: -1.00, ax: 90, eye: .right, sourcePhotoIndex: 2)
+                    ],
+                    machineAvgSPH: -2.20, machineAvgCYL: -1.00, machineAvgAX: 90,
+                    sourcePhotoIndex: 2, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            )
+        ]
+        let outcome = PrescriptionCalculator.calculate(printouts: printouts, upstreamDroppedOutliers: [])
+        XCTAssertNotEqual(outcome.rightEye?.source, .machineAvgValidated,
+                          "AVG should have been rejected against unfiltered raw M, not silently accepted")
+        XCTAssertEqual(outcome.rightEye?.source, .recomputedWithOutliersDropped)
+    }
+
+    func testCalculate_cylCaveatOnlyAppliesWhenAvgRejected() {
+        // (a) AVG accepted, |CYL| > 1.00 → SPH from synthetic AVG, NO swap.
+        let avgAccepted = [
+            makePrintout(
+                photo: 0,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -1.50, cyl: -1.50, ax: 90, eye: .right, sourcePhotoIndex: 0)
+                    ],
+                    machineAvgSPH: -2.00, machineAvgCYL: -1.50, machineAvgAX: 90,
+                    sourcePhotoIndex: 0, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            ),
+            makePrintout(
+                photo: 1,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -2.50, cyl: -1.50, ax: 90, eye: .right, sourcePhotoIndex: 1)
+                    ],
+                    machineAvgSPH: -2.00, machineAvgCYL: -1.50, machineAvgAX: 90,
+                    sourcePhotoIndex: 1, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            )
+        ]
+        let acceptedOutcome = PrescriptionCalculator.calculate(printouts: avgAccepted, upstreamDroppedOutliers: [])
+        XCTAssertEqual(acceptedOutcome.rightEye?.source, .machineAvgValidated)
+        // SPH should come from synthetic AVG (-2.00), NOT swapped to most-negative raw (-2.50).
+        XCTAssertEqual(acceptedOutcome.rightEye?.sph ?? 0, -2.00, accuracy: 0.01)
+
+        // (b) AVG rejected, |CYL| > 1.00 → SPH swapped to most-negative raw.
+        let avgRejected = [
+            makePrintout(
+                photo: 0,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -1.50, cyl: -1.50, ax: 90, eye: .right, sourcePhotoIndex: 0)
+                    ],
+                    machineAvgSPH: -5.00, machineAvgCYL: -1.50, machineAvgAX: 90,
+                    sourcePhotoIndex: 0, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            ),
+            makePrintout(
+                photo: 1,
+                right: EyeReading(
+                    id: UUID(),
+                    eye: .right,
+                    readings: [
+                        RawReading(id: UUID(), sph: -2.50, cyl: -1.50, ax: 90, eye: .right, sourcePhotoIndex: 1)
+                    ],
+                    machineAvgSPH: -5.00, machineAvgCYL: -1.50, machineAvgAX: 90,
+                    sourcePhotoIndex: 1, machineType: .desktop
+                ),
+                left: nil, pd: nil
+            )
+        ]
+        let rejectedOutcome = PrescriptionCalculator.calculate(printouts: avgRejected, upstreamDroppedOutliers: [])
+        XCTAssertNotEqual(rejectedOutcome.rightEye?.source, .machineAvgValidated)
+        // |aggregate.cyl| = 1.50 > 1.00 → SPH swapped to min(-1.50, -2.50) = -2.50.
+        XCTAssertEqual(rejectedOutcome.rightEye?.sph ?? 0, -2.50, accuracy: 0.01)
+    }
+
     // MARK: - Tier assignment (§7)
 
     func testCalculate_bothEyesPlano_overallTier0_symptomCheckFlagPerEye() {

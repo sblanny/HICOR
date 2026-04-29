@@ -146,11 +146,13 @@ enum PrescriptionCalculator {
         let eyeRaw = allRaw.filter { $0.eye == eye }
         guard !eyeRaw.isEmpty else { return nil }
 
-        let aggregate = CrossPrintoutAggregator.aggregate(readings: eyeRaw, for: eye)
-        let computedM = PowerVector.toM(sph: aggregate.sph, cyl: aggregate.cyl)
+        // §4: trust the machine AVG by default and validate it against the
+        // UNFILTERED raw spherical equivalent. Outlier rejection runs only when
+        // that comparison fails — running it first would let a bad in-printout
+        // reading be silently dropped and a contaminated machine AVG accepted
+        // because it matches the cleaned M.
+        let rawM = rawMeanM(eyeRaw)
 
-        // §4 Machine AVG. Aggregate machine AVGs across printouts into a single
-        // synthetic EyeReading and let MachineAvgValidator compare M.
         let machineAvg = aggregateMachineAvgs(printouts: printouts, eye: eye)
         let useMachineAvg: Bool
         if let avg = machineAvg {
@@ -166,7 +168,7 @@ enum PrescriptionCalculator {
             )
             useMachineAvg = MachineAvgValidator.validate(
                 eyeReading: synthetic,
-                computedM: computedM
+                computedM: rawM
             ) == .useMachineAvg
         } else {
             useMachineAvg = false
@@ -176,12 +178,20 @@ enum PrescriptionCalculator {
         let rawCyl: Double
         let rawAx: Int
         let source: PrescriptionSource
+        let acceptedReadings: [RawReading]
+        let phase5Dropped: [ConsistencyValidator.DroppedReading]
+
         if useMachineAvg, let avg = machineAvg {
             rawSph = avg.sph
             rawCyl = avg.cyl
             rawAx = avg.ax
             source = .machineAvgValidated
+            acceptedReadings = eyeRaw
+            phase5Dropped = []
         } else {
+            // AVG rejected (or absent). Now drop outliers and recompute.
+            let aggregate = CrossPrintoutAggregator.aggregate(readings: eyeRaw, for: eye)
+
             // §4.5 CYL caveat. When |computed CYL| > 1.00, prefer the
             // most-negative raw SPH reading — aggregated SPH is gentler than
             // what Mike's clinical experience says is correct at this CYL.
@@ -199,6 +209,8 @@ enum PrescriptionCalculator {
             source = aggregate.droppedOutliers.isEmpty
                 ? .recomputedViaPowerVector
                 : .recomputedWithOutliersDropped
+            acceptedReadings = aggregate.usedReadings
+            phase5Dropped = aggregate.droppedOutliers
         }
 
         let roundedSph = DiopterRounder.roundSph(rawSph, forCyl: rawCyl)
@@ -232,13 +244,24 @@ enum PrescriptionCalculator {
             cyl: allSphOnly ? 0.0 : roundedCyl,
             ax: allSphOnly ? 180 : roundedAx,
             source: source,
-            acceptedReadings: aggregate.usedReadings,
-            phase5Dropped: aggregate.droppedOutliers,
+            acceptedReadings: acceptedReadings,
+            phase5Dropped: phase5Dropped,
             machineAvgUsed: useMachineAvg,
             tier: perEyeTier,
             allSphOnly: allSphOnly,
             allRawSphs: eyeRaw.map(\.sph)
         )
+    }
+
+    // Mean spherical equivalent across all unfiltered readings. SPH-only
+    // readings contribute SPH as M (CYL placeholder excluded), matching
+    // CrossPrintoutAggregator.effectiveM.
+    private static func rawMeanM(_ readings: [RawReading]) -> Double {
+        guard !readings.isEmpty else { return 0 }
+        let sum = readings.reduce(0.0) { acc, r in
+            acc + PowerVector.toM(sph: r.sph, cyl: r.isSphOnly ? 0 : r.cyl)
+        }
+        return sum / Double(readings.count)
     }
 
     // MARK: - Machine AVG aggregation
