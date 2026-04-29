@@ -61,6 +61,20 @@ final class ClinicalFlagInstructionTests: XCTestCase {
         XCTAssertTrue(inst.body.contains("10"), "body=\(inst.body)")
     }
 
+    func test_insufficientReadings_sameSignAnisometropiaNeedsThird_mentionsThirdPrintout() {
+        let flag = ClinicalFlag.insufficientReadings(
+            eye: .right,
+            count: 2,
+            reason: .sameSignAnisometropiaNeedsThird
+        )
+        let inst = ClinicalFlagInstruction.make(for: flag)
+        XCTAssertEqual(inst.severity, .blocking)
+        XCTAssertTrue(inst.body.lowercased().contains("3rd printout"),
+                      "body=\(inst.body)")
+        XCTAssertTrue(inst.body.lowercased().contains("anisometropia"),
+                      "body=\(inst.body)")
+    }
+
     // MARK: - Anisometropia / antimetropia
 
     func test_anisometropiaAdvisory_isWarning_not_blocking() {

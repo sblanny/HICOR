@@ -478,8 +478,9 @@ final class PrescriptionCalculatorTests: XCTestCase {
         XCTAssertTrue(hasDispense)
     }
 
-    func testCalculate_rlSphDifferenceOverThree_withTwoPrintouts_emitsInsufficientFlag() {
-        // R -1.00, L -5.00 → diff 4.00 D (same sign, but §3b wants ≥3 printouts).
+    func testCalculate_sameSignSphDiffOverThree_withTwoPrintouts_emitsSameSignNeedsThirdFlag_notReferOut() {
+        // R -1.00, L -5.00 → diff 4.00 D, same sign. §8 with <3 printouts:
+        // emit advisory + sameSignAnisometropiaNeedsThird; do NOT refer out.
         let printouts = [
             makePrintout(
                 photo: 0,
@@ -495,13 +496,114 @@ final class PrescriptionCalculatorTests: XCTestCase {
             )
         ]
         let outcome = PrescriptionCalculator.calculate(printouts: printouts, upstreamDroppedOutliers: [])
-        let hasInsufficient = outcome.clinicalFlags.contains {
+        let hasNeedsThird = outcome.clinicalFlags.contains {
+            if case .insufficientReadings(_, _, let reason) = $0 {
+                if case .sameSignAnisometropiaNeedsThird = reason { return true }
+            }
+            return false
+        }
+        XCTAssertTrue(hasNeedsThird, "<3 printouts with same-sign diff > 3.00 must emit sameSignAnisometropiaNeedsThird")
+
+        let hasAdvisory = outcome.clinicalFlags.contains {
+            if case .anisometropiaAdvisory = $0 { return true }
+            return false
+        }
+        XCTAssertTrue(hasAdvisory, "advisory should still fire alongside the needs-third flag")
+
+        let hasReferOut = outcome.clinicalFlags.contains {
+            if case .anisometropiaReferOut = $0 { return true }
+            return false
+        }
+        XCTAssertFalse(hasReferOut, "<3 printouts must not refer out yet")
+    }
+
+    func testCalculate_sameSignSphDiffOverThree_withThreePrintouts_emitsReferOut_noNeedsThirdFlag() {
+        // Three identical printouts, diff still > 3.00 → refer out, no
+        // needs-third advisory.
+        let printouts = (0..<3).map { i in
+            makePrintout(
+                photo: i,
+                right: makeEyeReading(.right, sph: -1.00, cyl: -0.50, ax: 90),
+                left:  makeEyeReading(.left,  sph: -5.00, cyl: -0.50, ax: 85),
+                pd: 62
+            )
+        }
+        let outcome = PrescriptionCalculator.calculate(printouts: printouts, upstreamDroppedOutliers: [])
+        let hasReferOut = outcome.clinicalFlags.contains {
+            if case .anisometropiaReferOut = $0 { return true }
+            return false
+        }
+        XCTAssertTrue(hasReferOut)
+
+        let hasNeedsThird = outcome.clinicalFlags.contains {
+            if case .insufficientReadings(_, _, let reason) = $0 {
+                if case .sameSignAnisometropiaNeedsThird = reason { return true }
+            }
+            return false
+        }
+        XCTAssertFalse(hasNeedsThird, "≥3 printouts must not emit the needs-third flag")
+    }
+
+    func testCalculate_sameSignSphDiffUnderThree_neverEmitsNeedsThirdFlag() {
+        // Diff = 2.5 D → same-sign advisory but no needs-third flag.
+        let printouts = [
+            makePrintout(
+                photo: 0,
+                right: makeEyeReading(.right, sph: -1.00, cyl: -0.50, ax: 90),
+                left:  makeEyeReading(.left,  sph: -3.50, cyl: -0.50, ax: 85),
+                pd: 62
+            ),
+            makePrintout(
+                photo: 1,
+                right: makeEyeReading(.right, sph: -1.00, cyl: -0.50, ax: 90),
+                left:  makeEyeReading(.left,  sph: -3.50, cyl: -0.50, ax: 85),
+                pd: 62
+            )
+        ]
+        let outcome = PrescriptionCalculator.calculate(printouts: printouts, upstreamDroppedOutliers: [])
+        let hasNeedsThird = outcome.clinicalFlags.contains {
+            if case .insufficientReadings(_, _, let reason) = $0 {
+                if case .sameSignAnisometropiaNeedsThird = reason { return true }
+            }
+            return false
+        }
+        XCTAssertFalse(hasNeedsThird)
+    }
+
+    func testCalculate_mixedSignSphDiffOverThree_withTwoPrintouts_emitsRlSphDiffReason() {
+        // R +2.00, L -2.50 → diff 4.5 D, mixed sign. §3b mixed-sign retains
+        // the generic rlSphDifferenceExceedsThree reason; the §3a
+        // antimetropiaNeedsFour reason fires too.
+        let printouts = [
+            makePrintout(
+                photo: 0,
+                right: makeEyeReading(.right, sph: 2.00, cyl: -0.50, ax: 90),
+                left:  makeEyeReading(.left,  sph: -2.50, cyl: -0.50, ax: 85),
+                pd: 62
+            ),
+            makePrintout(
+                photo: 1,
+                right: makeEyeReading(.right, sph: 2.00, cyl: -0.50, ax: 90),
+                left:  makeEyeReading(.left,  sph: -2.50, cyl: -0.50, ax: 85),
+                pd: 62
+            )
+        ]
+        let outcome = PrescriptionCalculator.calculate(printouts: printouts, upstreamDroppedOutliers: [])
+        let hasRlDiff = outcome.clinicalFlags.contains {
             if case .insufficientReadings(_, _, let reason) = $0 {
                 if case .rlSphDifferenceExceedsThree = reason { return true }
             }
             return false
         }
-        XCTAssertTrue(hasInsufficient)
+        XCTAssertTrue(hasRlDiff, "mixed-sign diff > 3.00 with <3 printouts must still emit rlSphDifferenceExceedsThree")
+
+        let hasSameSignNeedsThird = outcome.clinicalFlags.contains {
+            if case .insufficientReadings(_, _, let reason) = $0 {
+                if case .sameSignAnisometropiaNeedsThird = reason { return true }
+            }
+            return false
+        }
+        XCTAssertFalse(hasSameSignNeedsThird, "mixed-sign must not emit the same-sign-specific reason")
     }
 
     func testCalculate_highSphOverTen_withTwoPrintouts_emitsInsufficientFlag() {

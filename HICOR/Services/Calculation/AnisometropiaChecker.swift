@@ -5,7 +5,11 @@ import Foundation
 // Same-sign (both eyes positive, both negative, or either zero):
 //   |R − L| ≤ 2.00  → normal, dispense
 //   |R − L| > 2.00  → advisory banner (depth-perception warning)
-//   |R − L| > 3.00  → refer out
+//   |R − L| > 3.00 with ≥3 printouts → refer out
+//   |R − L| > 3.00 with <3 printouts → advisory; the orchestrator emits a
+//     separate insufficientReadings flag asking for a 3rd printout before
+//     refer-out fires (§8: "take 3 readings, look for <3 D option, otherwise
+//     refer out")
 //
 // Mixed-sign (antimetropia — one eye strictly positive, the other strictly
 // negative):
@@ -24,7 +28,7 @@ enum AnisometropiaChecker {
         case antimetropiaReferOut
     }
 
-    static func check(rightSph: Double, leftSph: Double) -> Decision {
+    static func check(rightSph: Double, leftSph: Double, printoutCount: Int) -> Decision {
         if isAntimetropia(rightSph: rightSph, leftSph: leftSph) {
             if abs(rightSph) > Constants.antimetropiaBothEyesMaxAbs ||
                abs(leftSph) > Constants.antimetropiaBothEyesMaxAbs {
@@ -36,6 +40,11 @@ enum AnisometropiaChecker {
 
         let diff = abs(rightSph - leftSph)
         if diff > Constants.anisometropiaReferOutThreshold {
+            // §8: with fewer than 3 printouts, hold off on refer-out and let
+            // the operator capture a 3rd printout to verify the difference.
+            if printoutCount < 3 {
+                return .sameSignAdvisory(diff: diff)
+            }
             return .sameSignReferOut(diff: diff)
         }
         if diff > Constants.anisometropiaAdvisoryThreshold {

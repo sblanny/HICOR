@@ -53,6 +53,13 @@ final class FinalPrescriptionTests: XCTestCase {
         XCTAssertEqual(decoded, reason)
     }
 
+    func testInsufficientReadingsReason_codableRoundtrip_sameSignAnisometropiaNeedsThird() throws {
+        let reason: InsufficientReadingsReason = .sameSignAnisometropiaNeedsThird
+        let encoded = try JSONEncoder().encode(reason)
+        let decoded = try JSONDecoder().decode(InsufficientReadingsReason.self, from: encoded)
+        XCTAssertEqual(decoded, reason)
+    }
+
     // MARK: - ClinicalFlag
 
     func testClinicalFlag_insufficientReadings_carriesTypedReason() throws {

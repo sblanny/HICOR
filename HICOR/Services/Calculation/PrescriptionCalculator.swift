@@ -51,7 +51,11 @@ enum PrescriptionCalculator {
 
         // §8 Anisometropia. Only evaluated when both eyes produced a value.
         if let r = rightResult, let l = leftResult {
-            let decision = AnisometropiaChecker.check(rightSph: r.sph, leftSph: l.sph)
+            let decision = AnisometropiaChecker.check(
+                rightSph: r.sph,
+                leftSph: l.sph,
+                printoutCount: printouts.count
+            )
             switch decision {
             case .normal:
                 break
@@ -308,13 +312,21 @@ enum PrescriptionCalculator {
                 flags.append(.insufficientReadings(eye: .right, count: printoutCount, reason: .antimetropiaNeedsFour))
             }
 
-            // (b) R/L SPH diff > 3.00 needs ≥3 printouts
+            // (b) R/L SPH diff > 3.00 needs ≥3 printouts. Same-sign gets a
+            // sign-specific reason — §8 says "take 3 readings, look for <3 D
+            // option, otherwise refer out", so the operator's next step is
+            // capture-then-recheck rather than the generic large-diff banner
+            // that mixed-sign cases use.
             let diff = abs(r - l)
             if diff > Constants.rlDiffTriggersMin3 && printoutCount < 3 {
+                let mixedSign = (r > 0 && l < 0) || (r < 0 && l > 0)
+                let reason: InsufficientReadingsReason = mixedSign
+                    ? .rlSphDifferenceExceedsThree(diff: diff)
+                    : .sameSignAnisometropiaNeedsThird
                 flags.append(.insufficientReadings(
                     eye: .right,
                     count: printoutCount,
-                    reason: .rlSphDifferenceExceedsThree(diff: diff)
+                    reason: reason
                 ))
             }
 

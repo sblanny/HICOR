@@ -176,6 +176,12 @@ struct ClinicalFlagInstruction: Equatable {
                 title: "More printouts needed",
                 body: "SPH exceeds 10 D on at least one eye. Mike's procedure requires at least 3 printouts for high-SPH cases. Please capture another photo."
             )
+        case .sameSignAnisometropiaNeedsThird:
+            return ClinicalFlagInstruction(
+                severity: .blocking,
+                title: "More printouts needed",
+                body: "Same-sign anisometropia >3.00 D detected. Take a 3rd printout to verify before referring out."
+            )
         }
     }
 }

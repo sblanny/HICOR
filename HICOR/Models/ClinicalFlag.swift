@@ -5,6 +5,7 @@ enum InsufficientReadingsReason: Equatable, Codable {
     case rlSphDifferenceExceedsThree(diff: Double)
     case onePlanoOtherHighSph
     case highSphOverTen
+    case sameSignAnisometropiaNeedsThird
 }
 
 enum ClinicalFlag: Equatable, Codable {
