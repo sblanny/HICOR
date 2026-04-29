@@ -268,14 +268,6 @@ struct PhotoCaptureView: View {
                         .font(.caption)
                         .accessibilityLabel("Printout \(displayNumber) finalized")
                 }
-                Spacer(minLength: 0)
-                Button(role: .destructive) {
-                    pendingRemovePrintoutId = printout.id
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                }
-                .accessibilityLabel("Remove Printout \(displayNumber)")
             }
 
             HStack(alignment: .center, spacing: 8) {
@@ -304,6 +296,14 @@ struct PhotoCaptureView: View {
                     .accessibilityLabel("Capture more photos for Printout \(displayNumber)")
                 }
                 Spacer(minLength: 0)
+                Button(role: .destructive) {
+                    pendingRemovePrintoutId = printout.id
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Remove Printout \(displayNumber)")
             }
         }
         .padding(.vertical, 4)
