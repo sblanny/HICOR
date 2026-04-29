@@ -257,7 +257,7 @@ struct PhotoCaptureView: View {
     }
 
     private func printoutRow(printout: Printout, displayNumber: Int) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text("Printout \(displayNumber)")
                     .font(.caption.weight(.semibold))
@@ -268,9 +268,17 @@ struct PhotoCaptureView: View {
                         .font(.caption)
                         .accessibilityLabel("Printout \(displayNumber) finalized")
                 }
+                Spacer(minLength: 0)
+                Button(role: .destructive) {
+                    pendingRemovePrintoutId = printout.id
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.subheadline)
+                }
+                .accessibilityLabel("Remove Printout \(displayNumber)")
             }
 
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 ForEach(Array(printout.photos.enumerated()), id: \.offset) { photoIdx, data in
                     printoutThumbnail(
                         data: data,
@@ -280,25 +288,23 @@ struct PhotoCaptureView: View {
                         flatIndex: flatIndex(forPrintoutId: printout.id, photoIndex: photoIdx)
                     )
                 }
-            }
-
-            if printout.photos.count < Constants.maxPhotosPerPrintout {
-                Button {
-                    captureMoreTargetPrintoutId = printout.id
-                } label: {
-                    Label("Capture more", systemImage: "plus.circle")
-                        .font(.caption.weight(.semibold))
+                if printout.photos.count < Constants.maxPhotosPerPrintout {
+                    Button {
+                        captureMoreTargetPrintoutId = printout.id
+                    } label: {
+                        Image(systemName: "camera.fill")
+                            .font(.title3)
+                            .frame(width: 72, height: 72)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4]))
+                            )
+                    }
+                    .accessibilityLabel("Capture more photos for Printout \(displayNumber)")
                 }
-                .accessibilityLabel("Capture more photos for Printout \(displayNumber)")
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
-
-            Button("Remove", role: .destructive) {
-                pendingRemovePrintoutId = printout.id
-            }
-            .font(.caption.weight(.semibold))
-            .accessibilityLabel("Remove Printout \(displayNumber)")
         }
         .padding(.vertical, 4)
         .overlay(alignment: .leading) {
