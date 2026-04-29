@@ -95,6 +95,27 @@ final class PhotoCaptureState {
         printouts[printouts.count - 1].photos.append(data)
     }
 
+    /// Appends to a specific printout without changing its position in the
+    /// list or its finalized flag. Used by per-row "Capture more" so a
+    /// finalized earlier printout can grow another sample without becoming
+    /// the active one (which would also re-number every later printout).
+    func addPhoto(_ data: Data, toPrintoutId id: UUID) {
+        guard let idx = printouts.firstIndex(where: { $0.id == id }) else { return }
+        guard printouts[idx].photos.count < Constants.maxPhotosPerPrintout else { return }
+        printouts[idx].photos.append(data)
+    }
+
+    /// Removes the printout entirely (all its photos). Used by the per-row
+    /// Remove button and by the "× tap on the last remaining photo" path,
+    /// both gated by a confirmation dialog at the view layer. Restores the
+    /// "never empty" invariant if the last printout is the one being removed.
+    func removePrintout(id: UUID) {
+        printouts.removeAll { $0.id == id }
+        if printouts.isEmpty {
+            printouts = [Printout()]
+        }
+    }
+
     /// Marks the active printout done. No-op if it has no photos yet
     /// (don't create an empty group the operator has to dismiss).
     func finalizeCurrentPrintout() {
@@ -120,10 +141,16 @@ final class PhotoCaptureState {
         guard let pIdx = printouts.firstIndex(where: { $0.id == printoutId }) else { return }
         guard printouts[pIdx].photos.indices.contains(photoIndex) else { return }
         printouts[pIdx].photos.remove(at: photoIndex)
-        // If removing the last photo leaves an empty non-tail printout,
-        // drop the group entirely to avoid empty slots in the UI. The tail
-        // printout is allowed to be empty — it's the "next capture goes
-        // here" slot.
+        // Drop below the consensus floor → printout is no longer finalized.
+        // The view will hide its ✓ and the printout becomes ineligible for
+        // analysis until another capture brings it back to the floor.
+        if printouts[pIdx].photos.count < Constants.minPhotosPerPrintout {
+            printouts[pIdx].finalized = false
+        }
+        // Safety net: if removing the last photo leaves an empty non-tail
+        // printout, drop the group. The view layer should now intercept
+        // "× tap on last photo" and route through removePrintout(id:) after
+        // a confirmation dialog, so this branch is rarely exercised.
         if printouts[pIdx].photos.isEmpty && pIdx != printouts.count - 1 {
             printouts.remove(at: pIdx)
         }

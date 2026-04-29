@@ -6,9 +6,13 @@ enum Constants {
     static let cloudKitContainerID = "iCloud.com.creativearchives.hicor"
     // Clinical requirement per MIKE_RX_PROCEDURE.md: 2-5 autorefractor printouts
     // per patient. Operators may take multiple photos of the same printout so
-    // OCR consensus can recover faint or clipped values.
+    // OCR consensus can recover faint or clipped values. A printout is only
+    // considered "finalized" (eligible for analysis) once it has at least
+    // minPhotosPerPrintout samples; below that, deleting a photo drops the
+    // ✓ until another capture brings it back to the floor.
     static let minPrintoutsRequired = 2
     static let maxPrintoutsAllowed = 5
+    static let minPhotosPerPrintout = 2
     static let maxPhotosPerPrintout = 4
 
     // MARK: - Phase 5 (see HICOR/Documentation/MIKE_RX_PROCEDURE.md §Implementation Constants)

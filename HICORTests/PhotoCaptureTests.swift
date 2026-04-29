@@ -156,6 +156,110 @@ final class PhotoCaptureTests: XCTestCase {
         XCTAssertEqual(state.totalPhotoCount, 3)
     }
 
+    func testAddPhotoToSpecificPrintoutAppendsThereNotTail() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.finalizeCurrentPrintout()
+        state.addPhoto(Data([0x02]))
+
+        let firstId = state.printouts[0].id
+        let tailId = state.printouts[1].id
+
+        state.addPhoto(Data([0xAA]), toPrintoutId: firstId)
+
+        XCTAssertEqual(state.printouts.count, 2, "Order is preserved — appending to a non-tail printout must not move it")
+        XCTAssertEqual(state.printouts[0].id, firstId)
+        XCTAssertEqual(state.printouts[1].id, tailId)
+        XCTAssertEqual(state.printouts[0].photos, [Data([0x01]), Data([0xAA])])
+    }
+
+    func testAddPhotoToFinalizedPrintoutKeepsFinalized() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.addPhoto(Data([0x02]))
+        state.finalizeCurrentPrintout()
+        let id = state.printouts[0].id
+
+        state.addPhoto(Data([0x03]), toPrintoutId: id)
+
+        XCTAssertEqual(state.printouts[0].photos.count, 3)
+        XCTAssertTrue(state.printouts[0].finalized,
+                      "Bumping sample size on a finalized printout must not undo finalization")
+    }
+
+    func testAddPhotoToSpecificPrintoutRespectsMax() {
+        let state = PhotoCaptureState()
+        for byte in 0..<Constants.maxPhotosPerPrintout {
+            state.addPhoto(Data([UInt8(byte)]))
+        }
+        let id = state.printouts[0].id
+
+        state.addPhoto(Data([0xFF]), toPrintoutId: id)
+
+        XCTAssertEqual(state.printouts[0].photos.count, Constants.maxPhotosPerPrintout,
+                       "addPhoto(_:toPrintoutId:) must honor maxPhotosPerPrintout")
+    }
+
+    func testRemovePhotoBelowMinFloorUnfinalizes() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.addPhoto(Data([0x02]))
+        state.finalizeCurrentPrintout()
+        XCTAssertTrue(state.printouts[0].finalized)
+        let id = state.printouts[0].id
+
+        state.removePhoto(printoutId: id, photoIndex: 0)
+
+        XCTAssertEqual(state.printouts[0].photos.count, 1)
+        XCTAssertFalse(state.printouts[0].finalized,
+                       "Dropping below minPhotosPerPrintout must clear the ✓ until the floor is restored")
+    }
+
+    func testRemovePhotoAtOrAboveMinFloorStaysFinalized() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.addPhoto(Data([0x02]))
+        state.addPhoto(Data([0x03]))
+        state.finalizeCurrentPrintout()
+        let id = state.printouts[0].id
+
+        state.removePhoto(printoutId: id, photoIndex: 0)
+
+        XCTAssertEqual(state.printouts[0].photos.count, 2)
+        XCTAssertTrue(state.printouts[0].finalized,
+                      "Two photos still meets minPhotosPerPrintout — finalization stands")
+    }
+
+    func testRemovePrintoutByIdDropsTheGroup() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        state.finalizeCurrentPrintout()
+        state.addPhoto(Data([0x02]))
+        state.finalizeCurrentPrintout()
+        state.addPhoto(Data([0x03]))
+        state.finalizeCurrentPrintout()
+        XCTAssertEqual(state.printouts.count, 3)
+
+        let middleId = state.printouts[1].id
+        state.removePrintout(id: middleId)
+
+        XCTAssertEqual(state.printouts.count, 2)
+        XCTAssertEqual(state.printouts[0].photos, [Data([0x01])])
+        XCTAssertEqual(state.printouts[1].photos, [Data([0x03])])
+    }
+
+    func testRemovePrintoutOfSoleEntryRestoresFreshEmptyInvariant() {
+        let state = PhotoCaptureState()
+        state.addPhoto(Data([0x01]))
+        let id = state.printouts[0].id
+
+        state.removePrintout(id: id)
+
+        XCTAssertEqual(state.printouts.count, 1, "Invariant: never empty after construction")
+        XCTAssertTrue(state.printouts[0].photos.isEmpty)
+        XCTAssertFalse(state.printouts[0].finalized)
+    }
+
     func testPDRequiredBlocksCommitUntilEntered() {
         let state = PhotoCaptureState()
         state.addPhoto(Data([0x01]))

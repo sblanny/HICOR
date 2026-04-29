@@ -9,6 +9,9 @@ struct PhotoCaptureView: View {
 
     @State private var state = PhotoCaptureState()
     @State private var showingCamera = false
+    @State private var captureMoreTargetPrintoutId: UUID?
+    @State private var pendingRemovePrintoutId: UUID?
+    @State private var pendingRemoveLastPhotoPrintoutId: UUID?
     @State private var fullScreenFlatIndex: Int?
     @State private var showCommitBlockedAlert = false
     @State private var navigateToAnalysis = false
@@ -63,6 +66,52 @@ struct PhotoCaptureView: View {
                 onCancel: { showingCamera = false }
             )
             .ignoresSafeArea()
+        }
+        .fullScreenCover(item: Binding(
+            get: { captureMoreTargetPrintoutId.map { IdentifiedUUID(id: $0) } },
+            set: { captureMoreTargetPrintoutId = $0?.id }
+        )) { wrapper in
+            DocumentScanView(
+                onImagesPicked: { images in
+                    let id = wrapper.id
+                    captureMoreTargetPrintoutId = nil
+                    saveCapturedImages(images, toPrintoutId: id)
+                },
+                onCancel: { captureMoreTargetPrintoutId = nil }
+            )
+            .ignoresSafeArea()
+        }
+        .confirmationDialog(
+            removePrintoutDialogTitle,
+            isPresented: Binding(
+                get: { pendingRemovePrintoutId != nil },
+                set: { if !$0 { pendingRemovePrintoutId = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let id = pendingRemovePrintoutId {
+                    state.removePrintout(id: id)
+                }
+                pendingRemovePrintoutId = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRemovePrintoutId = nil }
+        }
+        .confirmationDialog(
+            "Remove this printout entirely?",
+            isPresented: Binding(
+                get: { pendingRemoveLastPhotoPrintoutId != nil },
+                set: { if !$0 { pendingRemoveLastPhotoPrintoutId = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let id = pendingRemoveLastPhotoPrintoutId {
+                    state.removePrintout(id: id)
+                }
+                pendingRemoveLastPhotoPrintoutId = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRemoveLastPhotoPrintoutId = nil }
         }
         .alert("Could not save photo",
                isPresented: Binding(
@@ -195,11 +244,11 @@ struct PhotoCaptureView: View {
     }
 
     private var printoutList: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 16) {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(state.printouts.enumerated()), id: \.element.id) { idx, printout in
                     if !printout.photos.isEmpty {
-                        printoutColumn(printout: printout, displayNumber: idx + 1)
+                        printoutRow(printout: printout, displayNumber: idx + 1)
                     }
                 }
             }
@@ -207,24 +256,17 @@ struct PhotoCaptureView: View {
         }
     }
 
-    private func printoutColumn(printout: Printout, displayNumber: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func printoutRow(printout: Printout, displayNumber: Int) -> some View {
+        HStack(alignment: .center, spacing: 12) {
             HStack(spacing: 6) {
                 Text("Printout \(displayNumber)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 if printout.finalized {
-                    // Tap to un-finalize so new captures flow back into
-                    // this printout — useful when the operator realizes
-                    // they want another photo of an already-captured sheet.
-                    Button {
-                        state.reactivatePrintout(id: printout.id)
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.caption)
-                    }
-                    .accessibilityLabel("Reactivate Printout \(displayNumber)")
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                        .accessibilityLabel("Printout \(displayNumber) finalized")
                 }
             }
 
@@ -234,10 +276,29 @@ struct PhotoCaptureView: View {
                         data: data,
                         printoutId: printout.id,
                         photoIndex: photoIdx,
+                        photoCount: printout.photos.count,
                         flatIndex: flatIndex(forPrintoutId: printout.id, photoIndex: photoIdx)
                     )
                 }
             }
+
+            if printout.photos.count < Constants.maxPhotosPerPrintout {
+                Button {
+                    captureMoreTargetPrintoutId = printout.id
+                } label: {
+                    Label("Capture more", systemImage: "plus.circle")
+                        .font(.caption.weight(.semibold))
+                }
+                .accessibilityLabel("Capture more photos for Printout \(displayNumber)")
+            }
+
+            Spacer(minLength: 0)
+
+            Button("Remove", role: .destructive) {
+                pendingRemovePrintoutId = printout.id
+            }
+            .font(.caption.weight(.semibold))
+            .accessibilityLabel("Remove Printout \(displayNumber)")
         }
         .padding(.vertical, 4)
         .overlay(alignment: .leading) {
@@ -250,7 +311,7 @@ struct PhotoCaptureView: View {
         }
     }
 
-    private func printoutThumbnail(data: Data, printoutId: UUID, photoIndex: Int, flatIndex: Int) -> some View {
+    private func printoutThumbnail(data: Data, printoutId: UUID, photoIndex: Int, photoCount: Int, flatIndex: Int) -> some View {
         ZStack(alignment: .topTrailing) {
             if let ui = UIImage(data: data) {
                 Image(uiImage: ui)
@@ -261,7 +322,14 @@ struct PhotoCaptureView: View {
                     .onTapGesture { fullScreenFlatIndex = flatIndex }
             }
             Button {
-                state.removePhoto(printoutId: printoutId, photoIndex: photoIndex)
+                if photoCount <= 1 {
+                    // Removing the sole photo is structurally identical to
+                    // removing the printout — surface the destructive intent
+                    // so the operator can't drop a whole sheet by tapping ×.
+                    pendingRemoveLastPhotoPrintoutId = printoutId
+                } else {
+                    state.removePhoto(printoutId: printoutId, photoIndex: photoIndex)
+                }
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.white, .red)
@@ -395,8 +463,42 @@ struct PhotoCaptureView: View {
         }
         state.finalizeCurrentPrintout()
     }
+
+    @MainActor
+    private func saveCapturedImages(_ images: [UIImage], toPrintoutId id: UUID) {
+        guard !images.isEmpty else { return }
+        var added = 0
+        for image in images {
+            guard let data = image.jpegData(compressionQuality: 0.8) else { continue }
+            state.addPhoto(data, toPrintoutId: id)
+            added += 1
+        }
+        if added == 0 {
+            captureRejectionMessage = "Could not process the captured photos. Please try again."
+            return
+        }
+        // Mirror the top-button auto-finalize: if the printout now meets
+        // the consensus floor, mark it finalized so the ✓ matches the
+        // sample count without forcing the operator to manage group state.
+        if let idx = state.printouts.firstIndex(where: { $0.id == id }),
+           state.printouts[idx].photos.count >= Constants.minPhotosPerPrintout {
+            state.printouts[idx].finalized = true
+        }
+    }
+
+    private var removePrintoutDialogTitle: String {
+        guard let id = pendingRemovePrintoutId,
+              let idx = state.printouts.firstIndex(where: { $0.id == id }) else {
+            return "Remove printout?"
+        }
+        return "Remove all photos in Printout \(idx + 1)?"
+    }
 }
 
 private struct IdentifiedIndex: Identifiable {
     var id: Int
+}
+
+private struct IdentifiedUUID: Identifiable {
+    var id: UUID
 }
