@@ -287,59 +287,12 @@ struct PatientDetailView: View {
             DisclosureGroup("Per-printout readings (\(results.count))") {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(results.enumerated()), id: \.offset) { idx, r in
-                        perPhotoCard(index: idx, result: r)
+                        PrintoutReadingsCard(index: idx, result: r)
                     }
                 }
                 .padding(.top, 8)
             }
-            .padding()
-            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
-    private func perPhotoCard(index: Int, result: PrintoutResult) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Printout \(index + 1)").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(result.machineType == .desktop ? "Desktop" : "Handheld")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.15), in: Capsule())
-            }
-            eyeBlock(label: "R", reading: result.rightEye)
-            eyeBlock(label: "L", reading: result.leftEye)
-            if let pd = result.pd {
-                Text("PD \(Int(pd)) mm").font(.caption2)
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.tertiary, in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    @ViewBuilder
-    private func eyeBlock(label: String, reading: EyeReading?) -> some View {
-        if let reading, !reading.readings.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(reading.readings) { r in
-                    Text("\(label): \(formatReading(r))")
-                        .font(.system(.caption, design: .monospaced))
-                        .opacity(r.lowConfidence ? 0.6 : 1.0)
-                }
-                if let aSPH = reading.machineAvgSPH,
-                   let aCYL = reading.machineAvgCYL,
-                   let aAX  = reading.machineAvgAX {
-                    Text("\(label) AVG: \(DiopterFormatter.format(aSPH)) / \(DiopterFormatter.format(aCYL)) × \(aAX)°")
-                        .font(.system(.caption, design: .monospaced).weight(.semibold))
-                        .foregroundStyle(.blue)
-                }
-            }
-        } else {
-            Text("\(label): —")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .padding(.vertical, 4)
         }
     }
 
