@@ -11,7 +11,7 @@ struct HamburgerMenu: View {
         VStack(spacing: 0) {
             row(icon: "clock.arrow.circlepath", title: "History", action: onShowHistory)
             Divider().padding(.leading, 56)
-            row(icon: "mappin.and.ellipse", title: "Change Location / Date", action: onChangeLocation)
+            row(icon: "mappin.and.ellipse", title: "Change Location", action: onChangeLocation)
             Divider().padding(.leading, 56)
             row(icon: "info.circle", title: "About", action: onShowAbout)
             Spacer()

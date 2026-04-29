@@ -176,7 +176,7 @@ struct PhotoCaptureView: View {
             Button("Cancel", role: .cancel) {}
             Button("Discard and Continue", role: .destructive) { postReturnToRoot() }
         } message: {
-            Text("Going back to Location/Date setup will discard the current patient's data. This cannot be undone.")
+            Text("Going back to Location setup will discard the current patient's data. This cannot be undone.")
         }
     }
 
