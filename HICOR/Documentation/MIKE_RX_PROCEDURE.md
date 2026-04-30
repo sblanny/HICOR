@@ -195,7 +195,7 @@ Record as a medical referral for trip documentation.
 - Both eyes within −1.50 to +1.50 D → dispense (treat as low-power separate prescriptions)
 - Either eye outside ±1.50 D → refer out (do not dispense)
 - ANY mixed-sign case → require minimum 4 printouts
-- When dispensing mixed-sign: use the LOWEST absolute SPH value
+- When dispensing mixed-sign: each eye receives its own SPH from its own readings. The lowest absolute SPH value is surfaced to the operator as an awareness flag (`antimetropiaDispense(lowestAbsEye:)`) so they can confirm the patient understands the unusual prescription. Do NOT apply one eye's SPH to both eyes — that would under/over-correct one eye and break binocular fusion. (Mike clarification, April 28, 2026.)
 
 ### Section 9: PD (Pupillary Distance) Aggregation
 
@@ -357,3 +357,4 @@ Build test cases from these scenarios:
   - Scope clarification: HICOR ends at prescription display, FileMaker handles dispensing
 - **April 26, 2026** — CYL rounding rule corrected: Highlands Optical inventory does not stock 0.25 D CYL increments, so CYL rounds to nearest 0.50 D step. Tie direction is per-eye, driven by that eye's SPH magnitude (|SPH| ≥ 3.00 → stronger; otherwise weaker).
 - **April 28, 2026** — Escalation threshold updated to match implementation. `ConsistencyValidator` fires `.inconsistentEscalate` at `Constants.maxPrintoutsAllowed` (5), not 4. Document was previously stale on this. Behavior unchanged; doc now matches code. See `AUDIT_2026-04-27.md`.
+- **April 28, 2026** — Mike clarification on antimetropia SPH application: each eye uses its own SPH from its own readings; the "lowest absolute SPH" is operator awareness, not a calculation override. Resolves audit Issue D.
