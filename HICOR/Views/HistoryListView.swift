@@ -45,6 +45,9 @@ struct HistoryListView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task {
+            #if DEBUG
+            debugDumpAllRecords()
+            #endif
             loadDateOptions()
             loadPatients()
         }
@@ -175,6 +178,42 @@ struct HistoryListView: View {
             loadError = "Couldn't load history: \(error.localizedDescription)"
         }
     }
+
+    #if DEBUG
+    private func debugDumpAllRecords() {
+        let descriptor = FetchDescriptor<PatientRefraction>(
+            sortBy: [SortDescriptor(\.sessionDate, order: .reverse)]
+        )
+        do {
+            let all = try modelContext.fetch(descriptor)
+            print("🔍 [HistoryListView DEBUG] current location filter: \"\(location)\"")
+            print("🔍 [HistoryListView DEBUG] total PatientRefraction records in SwiftData: \(all.count)")
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            for p in all {
+                print("🔍   #\(p.patientNumber)  sessionDate=\(formatter.string(from: p.sessionDate))  sessionLocation=\"\(p.sessionLocation)\"")
+            }
+            let cal = Calendar.current
+            var byDay: [Date: [String: Int]] = [:]
+            for p in all {
+                let day = cal.startOfDay(for: p.sessionDate)
+                byDay[day, default: [:]][p.sessionLocation, default: 0] += 1
+            }
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "yyyy-MM-dd"
+            print("🔍 [HistoryListView DEBUG] unique days (by sessionDate startOfDay), counts per location:")
+            for day in byDay.keys.sorted(by: >) {
+                let perLocation = byDay[day]!
+                    .map { "\"\($0.key)\"=\($0.value)" }
+                    .sorted()
+                    .joined(separator: ", ")
+                print("🔍   \(dayFormatter.string(from: day)): \(perLocation)")
+            }
+        } catch {
+            print("🔍 [HistoryListView DEBUG] fetch failed: \(error)")
+        }
+    }
+    #endif
 
     private func loadDateOptions() {
         let repo = PatientRefractionRepository(modelContext: modelContext)
