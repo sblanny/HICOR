@@ -46,6 +46,11 @@ final class PatientRefractionRepository {
         return dates
     }
 
+    func delete(_ patient: PatientRefraction) throws {
+        modelContext.delete(patient)
+        try modelContext.save()
+    }
+
     func patientCount(forLocation location: String, date: Date) throws -> Int {
         let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
         let cal = Calendar.current

@@ -14,6 +14,7 @@ struct HistoryListView: View {
     @State private var showDatePicker: Bool = false
     @State private var search: String = ""
     @State private var loadError: String?
+    @State private var pendingDelete: PatientRefraction?
 
     init(location: String, date: Date) {
         self.location = location
@@ -124,8 +125,30 @@ struct HistoryListView: View {
                     HistoryRow(patient: patient)
                 }
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        pendingDelete = patient
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
             .listStyle(.plain)
+            .confirmationDialog(
+                "Delete this record?",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                presenting: pendingDelete
+            ) { patient in
+                Button("Delete Patient #\(patient.patientNumber)", role: .destructive) {
+                    deletePatient(patient)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { patient in
+                Text("This permanently removes Patient #\(patient.patientNumber) from this device. This cannot be undone.")
+            }
         }
     }
 
@@ -166,6 +189,18 @@ struct HistoryListView: View {
         let query = search.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return patients }
         return patients.filter { $0.patientNumber.contains(query) }
+    }
+
+    private func deletePatient(_ patient: PatientRefraction) {
+        let repo = PatientRefractionRepository(modelContext: modelContext)
+        do {
+            try repo.delete(patient)
+            loadPatients()
+            loadDateOptions()
+            loadError = nil
+        } catch {
+            loadError = "Couldn't delete: \(error.localizedDescription)"
+        }
     }
 
     private func loadPatients() {
