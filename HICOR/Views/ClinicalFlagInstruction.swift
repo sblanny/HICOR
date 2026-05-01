@@ -153,7 +153,7 @@ struct ClinicalFlagInstruction: Equatable {
             return ClinicalFlagInstruction(
                 severity: .blocking,
                 title: "More printouts needed",
-                body: "This patient has mixed signs between eyes (antimetropia). Mike's procedure requires 4 printouts for these cases. Return to the capture screen and add more photos."
+                body: "Mixed-sign prescription detected — one eye plus, one eye minus (antimetropia). This unusual pattern requires 4 printouts to verify, more than the usual 2–3. Capture one more printout on the autorefractor."
             )
         case .rlSphDifferenceExceedsThree(let diff):
             return ClinicalFlagInstruction(

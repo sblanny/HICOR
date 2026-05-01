@@ -14,10 +14,15 @@ final class ClinicalFlagInstructionTests: XCTestCase {
         let inst = ClinicalFlagInstruction.make(for: flag)
         XCTAssertEqual(inst.severity, .blocking)
         XCTAssertTrue(inst.title.lowercased().contains("more printouts needed"))
-        // Must name the clinical reason + minimum count (4) + action verb.
+        // Must name the clinical reason + minimum count + action verb, and
+        // must explain that this case needs more printouts than usual so the
+        // volunteer doesn't think the app is being overly cautious.
         XCTAssertTrue(inst.body.lowercased().contains("antimetropia"),
                       "body=\(inst.body)")
-        XCTAssertTrue(inst.body.contains("4"), "body=\(inst.body)")
+        XCTAssertTrue(inst.body.lowercased().contains("mixed-sign"),
+                      "body=\(inst.body)")
+        XCTAssertTrue(inst.body.lowercased().contains("4 printouts"),
+                      "body=\(inst.body)")
         XCTAssertTrue(inst.body.lowercased().contains("capture")
                       || inst.body.lowercased().contains("add"),
                       "body=\(inst.body)")
