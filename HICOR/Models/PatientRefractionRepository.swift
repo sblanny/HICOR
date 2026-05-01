@@ -10,34 +10,34 @@ final class PatientRefractionRepository {
     }
 
     func patientsForToday(location: String, date: Date) throws -> [PatientRefraction] {
+        let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
         let cal = Calendar.current
         let start = cal.startOfDay(for: date)
         let end = cal.date(byAdding: .day, value: 1, to: start)!
         let predicate = #Predicate<PatientRefraction> { p in
-            p.sessionLocation == location &&
-            p.sessionDate >= start &&
-            p.sessionDate < end
+            p.sessionDate >= start && p.sessionDate < end
         }
         let descriptor = FetchDescriptor<PatientRefraction>(
             predicate: predicate,
             sortBy: [SortDescriptor(\.patientNumber)]
         )
-        return try modelContext.fetch(descriptor)
+        let dayMatches = try modelContext.fetch(descriptor)
+        return dayMatches.filter {
+            $0.sessionLocation.trimmingCharacters(in: .whitespaces) == trimmedLocation
+        }
     }
 
     func availableDates(forLocation location: String) throws -> [Date] {
-        let predicate = #Predicate<PatientRefraction> { p in
-            p.sessionLocation == location
-        }
+        let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
         let descriptor = FetchDescriptor<PatientRefraction>(
-            predicate: predicate,
             sortBy: [SortDescriptor(\.sessionDate, order: .reverse)]
         )
         let all = try modelContext.fetch(descriptor)
         let cal = Calendar.current
         var seen = Set<Date>()
         var dates: [Date] = []
-        for patient in all {
+        for patient in all
+        where patient.sessionLocation.trimmingCharacters(in: .whitespaces) == trimmedLocation {
             let day = cal.startOfDay(for: patient.sessionDate)
             if seen.insert(day).inserted {
                 dates.append(day)
@@ -47,15 +47,17 @@ final class PatientRefractionRepository {
     }
 
     func patientCount(forLocation location: String, date: Date) throws -> Int {
+        let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
         let cal = Calendar.current
         let start = cal.startOfDay(for: date)
         let end = cal.date(byAdding: .day, value: 1, to: start)!
         let predicate = #Predicate<PatientRefraction> { p in
-            p.sessionLocation == location &&
-            p.sessionDate >= start &&
-            p.sessionDate < end
+            p.sessionDate >= start && p.sessionDate < end
         }
         let descriptor = FetchDescriptor<PatientRefraction>(predicate: predicate)
-        return try modelContext.fetchCount(descriptor)
+        let dayMatches = try modelContext.fetch(descriptor)
+        return dayMatches.filter {
+            $0.sessionLocation.trimmingCharacters(in: .whitespaces) == trimmedLocation
+        }.count
     }
 }

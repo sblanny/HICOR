@@ -51,4 +51,22 @@ actor PersistenceService {
     func save() throws {
         try modelContext.save()
     }
+
+    @discardableResult
+    func migrateNormalizeLocations() throws -> Int {
+        let descriptor = FetchDescriptor<PatientRefraction>()
+        let all = try modelContext.fetch(descriptor)
+        var changed = 0
+        for record in all {
+            let trimmed = record.sessionLocation.trimmingCharacters(in: .whitespaces)
+            if trimmed != record.sessionLocation {
+                record.sessionLocation = trimmed
+                changed += 1
+            }
+        }
+        if changed > 0 {
+            try modelContext.save()
+        }
+        return changed
+    }
 }

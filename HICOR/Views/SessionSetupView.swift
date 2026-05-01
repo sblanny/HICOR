@@ -50,8 +50,10 @@ struct SessionSetupView: View {
                 .padding(.horizontal)
 
                 Button {
-                    sessionContext.location = location
-                    let settings = SessionSettings(lastLocation: location)
+                    let trimmed = location.trimmingCharacters(in: .whitespaces)
+                    location = trimmed
+                    sessionContext.location = trimmed
+                    let settings = SessionSettings(lastLocation: trimmed)
                     settings.save()
                     navigate = true
                 } label: {
@@ -70,7 +72,7 @@ struct SessionSetupView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             let settings = SessionSettings.load()
-            location = settings.lastLocation
+            location = settings.lastLocation.trimmingCharacters(in: .whitespaces)
         }
         .navigationDestination(isPresented: $navigate) {
             PatientEntryView(sessionContext: sessionContext)

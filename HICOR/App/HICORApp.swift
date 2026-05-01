@@ -23,6 +23,17 @@ struct HICORApp: App {
         self.ocrService = OCRService()
 
         LensInventoryService.shared.load()
+
+        Task {
+            do {
+                let count = try await persistence.migrateNormalizeLocations()
+                if count > 0 {
+                    print("[migration] Trimmed sessionLocation whitespace on \(count) record(s)")
+                }
+            } catch {
+                print("[migration] sessionLocation normalization failed: \(error)")
+            }
+        }
     }
 
     var body: some Scene {
