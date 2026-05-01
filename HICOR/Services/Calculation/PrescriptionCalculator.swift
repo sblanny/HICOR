@@ -94,11 +94,12 @@ enum PrescriptionCalculator {
             }
         }()
 
-        // Tier-0 symptom-check flags only fire when BOTH eyes individually
-        // qualify — matching §7's "asymmetric Tier 0 dispenses" rule.
+        // Tier-0 symptom-check flag only fires when BOTH eyes individually
+        // qualify — matching §7's "asymmetric Tier 0 dispenses" rule. Emitted
+        // once per patient because the symptom check itself is patient-level
+        // (three questions asked once, not per eye).
         if rightResult?.tier == .tier0NoGlassesNeeded && leftResult?.tier == .tier0NoGlassesNeeded {
-            flags.append(.tier0SymptomCheckRequired(eye: .right))
-            flags.append(.tier0SymptomCheckRequired(eye: .left))
+            flags.append(.tier0SymptomCheckRequired)
         }
 
         // §9 PD aggregation.

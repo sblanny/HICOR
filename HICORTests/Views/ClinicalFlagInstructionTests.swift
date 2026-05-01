@@ -175,7 +175,7 @@ final class ClinicalFlagInstructionTests: XCTestCase {
     func test_tier0SymptomCheckRequired_isInfo_notBlocking() {
         // Tier 0 is not an error; it just prompts the symptom screen.
         let inst = ClinicalFlagInstruction.make(
-            for: .tier0SymptomCheckRequired(eye: .right)
+            for: .tier0SymptomCheckRequired
         )
         XCTAssertEqual(inst.severity, .info)
     }

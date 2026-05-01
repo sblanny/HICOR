@@ -290,7 +290,7 @@ final class PrescriptionCalculatorTests: XCTestCase {
 
     // MARK: - Tier assignment (§7)
 
-    func testCalculate_bothEyesPlano_overallTier0_symptomCheckFlagPerEye() {
+    func testCalculate_bothEyesPlano_overallTier0_symptomCheckFlagOnce() {
         let printouts = [
             makePrintout(
                 photo: 0,
@@ -311,7 +311,7 @@ final class PrescriptionCalculatorTests: XCTestCase {
             if case .tier0SymptomCheckRequired = $0 { return true }
             return false
         }
-        XCTAssertEqual(symptomFlags.count, 2)
+        XCTAssertEqual(symptomFlags.count, 1)
     }
 
     func testCalculate_asymmetricTier0_overallNotTier0_noSymptomFlag() {

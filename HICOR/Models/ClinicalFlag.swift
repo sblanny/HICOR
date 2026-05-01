@@ -9,7 +9,7 @@ enum InsufficientReadingsReason: Equatable, Codable {
 }
 
 enum ClinicalFlag: Equatable, Codable {
-    case tier0SymptomCheckRequired(eye: Eye)
+    case tier0SymptomCheckRequired
     case anisometropiaAdvisory(diffDiopters: Double)
     case anisometropiaReferOut(diffDiopters: Double)
     case antimetropiaDispense(lowestAbsEye: Eye)
