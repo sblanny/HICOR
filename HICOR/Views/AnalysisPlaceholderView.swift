@@ -209,7 +209,6 @@ struct AnalysisPlaceholderView: View {
             let idx = firstMissing.offset
             let cells = firstMissing.element.missingCells
             OCRLog.logger.error("OCR nav: printout=\(idx, privacy: .public) missing=\(cells.joined(separator: ","), privacy: .public)")
-            await persistFailure(snapshot: debugSnapshot ?? OCRDebugSnapshot(entries: [], overallError: ""))
             alertState = .printoutMissingCells(printoutIndex: idx, cells: cells)
             phase = .awaitingDecision
             return
@@ -236,7 +235,6 @@ struct AnalysisPlaceholderView: View {
 
         guard !results.isEmpty else {
             OCRLog.logger.error("OCR nav: consensus produced no PrintoutResults despite no missing cells")
-            await persistFailure(snapshot: debugSnapshot ?? OCRDebugSnapshot(entries: [], overallError: ""))
             presentError("The captured photos couldn't be parsed. Please retake the photo.", snapshot: debugSnapshot)
             return
         }
@@ -295,20 +293,6 @@ struct AnalysisPlaceholderView: View {
         debugSnapshot = snapshot
         phase = .awaitingDecision
         alertState = .error(message: message, snapshot: snapshot)
-    }
-
-    private func persistFailure(snapshot: OCRDebugSnapshot) async {
-        let encoded = (try? JSONEncoder().encode(snapshot.strippingImages())) ?? Data()
-        let failureRecord = PatientRefraction(
-            patientNumber: patientNumber,
-            sessionDate: Date(),
-            sessionLocation: sessionContext.location,
-            pd: pd,
-            pdManualEntry: pdManualEntry,
-            rawReadingsData: encoded,
-            photoData: allPhotosFlat
-        )
-        await sync.save(failureRecord)
     }
 
     private func humanReadable(_ error: Error) -> String {
