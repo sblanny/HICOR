@@ -252,23 +252,39 @@ struct HistoryListView: View {
 
     private func loadDateOptions() {
         let repo = PatientRefractionRepository(modelContext: modelContext)
+        let dates: [Date]
         do {
-            let dates = try repo.availableDates(forLocation: location)
-            let today = Calendar.current.startOfDay(for: Date())
-            var merged = dates
-            if !merged.contains(today) {
-                merged.insert(today, at: 0)
-            }
-            availableDates = merged
-            var counts: [Date: Int] = [:]
-            for day in merged {
-                counts[day] = try repo.patientCount(forLocation: location, date: day)
-            }
-            patientCounts = counts
+            dates = try repo.availableDates(forLocation: location)
         } catch {
+            #if DEBUG
+            print("📅 [loadDateOptions] availableDates failed: \(error)")
+            #endif
             availableDates = [Calendar.current.startOfDay(for: Date())]
             patientCounts = [:]
+            return
         }
+        let today = Calendar.current.startOfDay(for: Date())
+        var merged = dates
+        if !merged.contains(today) {
+            merged.insert(today, at: 0)
+        }
+        availableDates = merged
+        #if DEBUG
+        print("📅 [loadDateOptions] availableDates set to (\(merged.count)): \(merged)")
+        #endif
+
+        var counts: [Date: Int] = [:]
+        for day in merged {
+            do {
+                counts[day] = try repo.patientCount(forLocation: location, date: day)
+            } catch {
+                #if DEBUG
+                print("📅 [loadDateOptions] patientCount failed for \(day): \(error)")
+                #endif
+                counts[day] = 0
+            }
+        }
+        patientCounts = counts
     }
 }
 
