@@ -294,6 +294,68 @@ final class CrossPrintoutAggregatorTests: XCTestCase {
         XCTAssertFalse(result.readingsVaryWidely)
     }
 
+    // MARK: - Count < 3: skip rejection, average passthrough
+
+    func testAggregate_twoReadingsDisagree_averagesThemNoRejection() {
+        // Two readings 1.50 D apart. Without the count-<3 guard, ANSI floor
+        // would drop both, leaving zero survivors and producing NaN. Now we
+        // skip rejection entirely and just average — ConsistencyValidator
+        // owns the decision of whether 2-printout disagreement was acceptable.
+        let readings = [
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 0),
+            makeReading(sph: -0.50, cyl: -1.00, ax: 90, photo: 1)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertTrue(result.droppedOutliers.isEmpty, "no rejection at count < 3")
+        XCTAssertEqual(result.usedReadings.count, 2)
+        XCTAssertFalse(result.readingsVaryWidely, "wide-variance flag is for the >=3 path")
+        XCTAssertEqual(result.sph, -1.25, accuracy: 0.05, "average of -2.00 and -0.50")
+        XCTAssertFalse(result.sph.isNaN)
+        XCTAssertFalse(result.cyl.isNaN)
+    }
+
+    func testAggregate_twoReadingsAgree_averagesThemCleanly() {
+        let readings = [
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 0),
+            makeReading(sph: -2.25, cyl: -1.00, ax: 90, photo: 1)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertTrue(result.droppedOutliers.isEmpty)
+        XCTAssertEqual(result.usedReadings.count, 2)
+        XCTAssertEqual(result.sph, -2.125, accuracy: 0.05)
+    }
+
+    func testAggregate_threeReadings_axisOutlier_stillDropsViaJ45MAD() {
+        // Regression: rejection still runs at count >= 3.
+        let readings = [
+            makeReading(sph: -2.00, cyl: -1.00, ax: 60, photo: 0),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 65, photo: 1),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 120, photo: 2)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertEqual(result.droppedOutliers.count, 1, "rejection still runs at count >= 3")
+        XCTAssertEqual(result.droppedOutliers.first?.reading.ax, 120)
+    }
+
+    func testAggregate_resultNeverContainsNaN_acrossSmallNScenarios() {
+        let scenarios: [[(Double, Double, Int)]] = [
+            [(-2.00, -1.00, 90), (+1.00, -1.00, 90)],   // 2-reading wide spread (would be NaN before fix)
+            [(0.00, 0.00, 0), (0.00, 0.00, 0)],          // 2-reading identical plano
+            [(-5.00, -1.00, 90)]                         // 1-reading
+        ]
+        for scenario in scenarios {
+            let readings = scenario.enumerated().map { (i, t) in
+                makeReading(sph: t.0, cyl: t.1, ax: t.2, photo: i)
+            }
+            let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+            XCTAssertFalse(result.sph.isNaN, "sph NaN for scenario: \(scenario)")
+            XCTAssertFalse(result.cyl.isNaN, "cyl NaN for scenario: \(scenario)")
+        }
+    }
+
     func testAggregate_axisWrapAroundZero180_noFalseRejection() {
         // Readings on either side of the 0/180 boundary represent the same
         // axis clinically. Power-vector J0/J45 makes them numerically close,

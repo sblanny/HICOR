@@ -7,22 +7,26 @@ import Foundation
 //
 // Algorithm:
 //   1. Filter readings to the requested eye.
-//   2. Compute medians on power-vector components: M (all readings — sphOnly
-//      included), J0 / J45 (full readings only — sphOnly excluded from
-//      cyl/axis math per §10).
-//   3. Compute MAD per component (median of absolute deviations from median),
+//   2. If fewer than outlierRejectionMinSurvivors readings, skip rejection
+//      and average all readings (no clinical basis to identify an outlier
+//      without a majority anchor — ConsistencyValidator gates 2-printout
+//      disagreement at Layer 1).
+//   3. Otherwise, compute medians on power-vector components: M (all
+//      readings — sphOnly included), J0 / J45 (full readings only — sphOnly
+//      excluded from cyl/axis math per §10).
+//   4. Compute MAD per component (median of absolute deviations from median),
 //      floored at outlierRejectionMadFloor so identical readings don't
 //      collapse the tolerance window to zero.
-//   4. Drop a reading when its M deviation exceeds k×MAD on M, OR exceeds the
+//   5. Drop a reading when its M deviation exceeds k×MAD on M, OR exceeds the
 //      ANSI 1.00 D hard floor on M, OR (when full) its J0 / J45 deviation
 //      exceeds k×MAD on the respective component. Power-vector decomposition
 //      handles axis circularity automatically (J0/J45 are continuous; near-180°
 //      wrap is implicit).
-//   5. Sample-size floor: if rejection would leave fewer than
+//   6. Sample-size floor: if rejection would leave fewer than
 //      outlierRejectionMinSurvivors, retain all readings and surface the
 //      spread to the operator via a readingsVaryWidely flag (consumed by
 //      PrescriptionCalculator).
-//   6. Recompute MEAN M / J0 / J45 on survivors and reconstruct (sph, cyl, ax).
+//   7. Recompute MEAN M / J0 / J45 on survivors and reconstruct (sph, cyl, ax).
 enum CrossPrintoutAggregator {
 
     struct AggregatedReading: Equatable {
@@ -59,120 +63,130 @@ enum CrossPrintoutAggregator {
             )
         }
 
-        let fullReadings = eyeReadings.filter { !$0.isSphOnly }
-
-        // Medians on power-vector components (pre-drop baseline).
-        let allMs = eyeReadings.map { effectiveM($0) }
-        let medianM = median(allMs)
-        let medianJ0: Double
-        let medianJ45: Double
-        if fullReadings.isEmpty {
-            medianJ0 = 0
-            medianJ45 = 0
-        } else {
-            let j0s = fullReadings.map { PowerVector.toJ0(cyl: $0.cyl, axDegrees: $0.ax) }
-            let j45s = fullReadings.map { PowerVector.toJ45(cyl: $0.cyl, axDegrees: $0.ax) }
-            medianJ0 = median(j0s)
-            medianJ45 = median(j45s)
-        }
-
-        // MAD per component, floored. Empty fullReadings → infinite J-thresholds
-        // (those checks are unreachable for sphOnly anyway).
-        let madM: Double = max(
-            median(eyeReadings.map { abs(effectiveM($0) - medianM) }),
-            Constants.outlierRejectionMadFloor
-        )
-        let madJ0: Double
-        let madJ45: Double
-        if fullReadings.isEmpty {
-            madJ0 = .infinity
-            madJ45 = .infinity
-        } else {
-            let j0Devs = fullReadings.map { abs(PowerVector.toJ0(cyl: $0.cyl, axDegrees: $0.ax) - medianJ0) }
-            let j45Devs = fullReadings.map { abs(PowerVector.toJ45(cyl: $0.cyl, axDegrees: $0.ax) - medianJ45) }
-            madJ0 = max(median(j0Devs), Constants.outlierRejectionMadFloor)
-            madJ45 = max(median(j45Devs), Constants.outlierRejectionMadFloor)
-        }
-
-        let k = Constants.outlierRejectionK
-        let thresholdM = k * madM
-        let thresholdJ0 = k * madJ0
-        let thresholdJ45 = k * madJ45
-        let ansiFloor = Constants.outlierRejectionAnsiHardFloorM
-
-        var survivors: [RawReading] = []
-        var dropped: [ConsistencyValidator.DroppedReading] = []
-        for r in eyeReadings {
-            let m = effectiveM(r)
-            let devM = abs(m - medianM)
-
-            // 1. M-MAD check (adaptive)
-            if devM > thresholdM {
-                dropped.append(.init(
-                    reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
-                    reason: String(
-                        format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by %.2f D (3×MAD threshold %.2f D)",
-                        m, medianM, devM, thresholdM
-                    )
-                ))
-                continue
-            }
-            // 2. ANSI hard floor on M (independent safety net for sign-flip outliers)
-            if devM > ansiFloor {
-                dropped.append(.init(
-                    reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
-                    reason: String(
-                        format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by more than %.2f D (ANSI hard floor)",
-                        m, medianM, ansiFloor
-                    )
-                ))
-                continue
-            }
-            // 3. J0 / J45 MAD checks (full readings only)
-            if !r.isSphOnly && !fullReadings.isEmpty {
-                let j0 = PowerVector.toJ0(cyl: r.cyl, axDegrees: r.ax)
-                let j45 = PowerVector.toJ45(cyl: r.cyl, axDegrees: r.ax)
-                let devJ0 = abs(j0 - medianJ0)
-                let devJ45 = abs(j45 - medianJ45)
-                if devJ0 > thresholdJ0 {
-                    dropped.append(.init(
-                        reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
-                        reason: String(
-                            format: "Phase 5: power-vector J0 %.3f differs from median %.3f by %.3f (3×MAD threshold %.3f) — likely cyl/axis outlier",
-                            j0, medianJ0, devJ0, thresholdJ0
-                        )
-                    ))
-                    continue
-                }
-                if devJ45 > thresholdJ45 {
-                    dropped.append(.init(
-                        reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
-                        reason: String(
-                            format: "Phase 5: power-vector J45 %.3f differs from median %.3f by %.3f (3×MAD threshold %.3f) — likely cyl/axis outlier",
-                            j45, medianJ45, devJ45, thresholdJ45
-                        )
-                    ))
-                    continue
-                }
-            }
-            survivors.append(r)
-        }
-
-        // Sample-size floor: if rejection would leave too few survivors,
-        // retain all readings and surface the spread via readingsVaryWidely.
-        // PrescriptionCalculator reads this and emits .readingsVaryWidely.
+        // Below the rejection floor (count < 3): no clinical basis to identify
+        // an outlier without a majority anchor. ConsistencyValidator already
+        // gated 2-printout disagreement at Layer 1, so trust its decision and
+        // just compute the mean. This also avoids divide-by-zero / NaN if
+        // ANSI floor would otherwise drop all readings.
         let working: [RawReading]
         let reportedDropped: [ConsistencyValidator.DroppedReading]
         let readingsVaryWidely: Bool
-        if survivors.count < Constants.outlierRejectionMinSurvivors
-            && eyeReadings.count >= Constants.outlierRejectionMinSurvivors {
+        if eyeReadings.count < Constants.outlierRejectionMinSurvivors {
             working = eyeReadings
             reportedDropped = []
-            readingsVaryWidely = true
-        } else {
-            working = survivors
-            reportedDropped = dropped
             readingsVaryWidely = false
+        } else {
+            let fullReadings = eyeReadings.filter { !$0.isSphOnly }
+
+            // Medians on power-vector components (pre-drop baseline).
+            let allMs = eyeReadings.map { effectiveM($0) }
+            let medianM = median(allMs)
+            let medianJ0: Double
+            let medianJ45: Double
+            if fullReadings.isEmpty {
+                medianJ0 = 0
+                medianJ45 = 0
+            } else {
+                let j0s = fullReadings.map { PowerVector.toJ0(cyl: $0.cyl, axDegrees: $0.ax) }
+                let j45s = fullReadings.map { PowerVector.toJ45(cyl: $0.cyl, axDegrees: $0.ax) }
+                medianJ0 = median(j0s)
+                medianJ45 = median(j45s)
+            }
+
+            // MAD per component, floored. Empty fullReadings → infinite
+            // J-thresholds (those checks are unreachable for sphOnly anyway).
+            let madM: Double = max(
+                median(eyeReadings.map { abs(effectiveM($0) - medianM) }),
+                Constants.outlierRejectionMadFloor
+            )
+            let madJ0: Double
+            let madJ45: Double
+            if fullReadings.isEmpty {
+                madJ0 = .infinity
+                madJ45 = .infinity
+            } else {
+                let j0Devs = fullReadings.map { abs(PowerVector.toJ0(cyl: $0.cyl, axDegrees: $0.ax) - medianJ0) }
+                let j45Devs = fullReadings.map { abs(PowerVector.toJ45(cyl: $0.cyl, axDegrees: $0.ax) - medianJ45) }
+                madJ0 = max(median(j0Devs), Constants.outlierRejectionMadFloor)
+                madJ45 = max(median(j45Devs), Constants.outlierRejectionMadFloor)
+            }
+
+            let k = Constants.outlierRejectionK
+            let thresholdM = k * madM
+            let thresholdJ0 = k * madJ0
+            let thresholdJ45 = k * madJ45
+            let ansiFloor = Constants.outlierRejectionAnsiHardFloorM
+
+            var survivors: [RawReading] = []
+            var dropped: [ConsistencyValidator.DroppedReading] = []
+            for r in eyeReadings {
+                let m = effectiveM(r)
+                let devM = abs(m - medianM)
+
+                // 1. M-MAD check (adaptive)
+                if devM > thresholdM {
+                    dropped.append(.init(
+                        reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
+                        reason: String(
+                            format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by %.2f D (3×MAD threshold %.2f D)",
+                            m, medianM, devM, thresholdM
+                        )
+                    ))
+                    continue
+                }
+                // 2. ANSI hard floor on M (independent safety net for sign-flip outliers)
+                if devM > ansiFloor {
+                    dropped.append(.init(
+                        reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
+                        reason: String(
+                            format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by more than %.2f D (ANSI hard floor)",
+                            m, medianM, ansiFloor
+                        )
+                    ))
+                    continue
+                }
+                // 3. J0 / J45 MAD checks (full readings only)
+                if !r.isSphOnly && !fullReadings.isEmpty {
+                    let j0 = PowerVector.toJ0(cyl: r.cyl, axDegrees: r.ax)
+                    let j45 = PowerVector.toJ45(cyl: r.cyl, axDegrees: r.ax)
+                    let devJ0 = abs(j0 - medianJ0)
+                    let devJ45 = abs(j45 - medianJ45)
+                    if devJ0 > thresholdJ0 {
+                        dropped.append(.init(
+                            reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
+                            reason: String(
+                                format: "Phase 5: power-vector J0 %.3f differs from median %.3f by %.3f (3×MAD threshold %.3f) — likely cyl/axis outlier",
+                                j0, medianJ0, devJ0, thresholdJ0
+                            )
+                        ))
+                        continue
+                    }
+                    if devJ45 > thresholdJ45 {
+                        dropped.append(.init(
+                            reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
+                            reason: String(
+                                format: "Phase 5: power-vector J45 %.3f differs from median %.3f by %.3f (3×MAD threshold %.3f) — likely cyl/axis outlier",
+                                j45, medianJ45, devJ45, thresholdJ45
+                            )
+                        ))
+                        continue
+                    }
+                }
+                survivors.append(r)
+            }
+
+            // Sample-size floor: if rejection would leave too few survivors,
+            // retain all readings and surface the spread via readingsVaryWidely.
+            // PrescriptionCalculator reads this and emits .readingsVaryWidely.
+            if survivors.count < Constants.outlierRejectionMinSurvivors {
+                working = eyeReadings
+                reportedDropped = []
+                readingsVaryWidely = true
+            } else {
+                working = survivors
+                reportedDropped = dropped
+                readingsVaryWidely = false
+            }
         }
 
         // Recompute means on the working set.
