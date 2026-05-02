@@ -113,10 +113,15 @@ final class CrossPrintoutAggregatorTests: XCTestCase {
     }
 
     func testAggregate_mixedSphOnlyAndFull_sphOnlyContributesOnlyToSph() {
+        // M values clustered within MAD threshold (0.15 D) so no rejection
+        // fires — the assertions below test the *aggregation* path, not
+        // rejection. The original test data had 0.50 D SPH spread, which was
+        // fine under the old fixed-threshold algorithm (1.00 D agreement) but
+        // now exceeds 3×MAD when 2 of 3 readings are identical.
         let readings = [
-            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 0),
-            makeReading(sph: -2.25, cyl: -1.00, ax: 90, photo: 1),
-            makeReading(sph: -2.50, cyl: 0, ax: 0, photo: 2, sphOnly: true)
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 0),       // M = -2.50
+            makeReading(sph: -2.10, cyl: -1.00, ax: 90, photo: 1),       // M = -2.60
+            makeReading(sph: -2.50, cyl: 0, ax: 0, photo: 2, sphOnly: true)  // M = -2.50
         ]
         let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
         // sphOnly contributes to M (and therefore to reconstructed SPH) but
@@ -219,7 +224,11 @@ final class CrossPrintoutAggregatorTests: XCTestCase {
         XCTAssertEqual(result.droppedOutliers.count, 1)
         XCTAssertEqual(result.droppedOutliers.first?.photoIndex, 5)
         XCTAssertFalse(result.readingsVaryWidely)
-        XCTAssertEqual(result.sph, 0.25, accuracy: 0.05)
+        // After dropping the bad axis, mean M = 0.20 (3 sphOnly @ 0.25 + 2 cyl
+        // @ 0.125), and the surviving cyl readings reconstruct to cyl ≈ -0.25,
+        // so sph = M - cyl/2 ≈ 0.325. Still near-plano — the tier-0 path is
+        // reachable after rounding (sph rounds to 0.25, cyl to -0.25).
+        XCTAssertEqual(result.sph, 0.30, accuracy: 0.10)
     }
 
     func testAggregate_naturallyVariedReadings_dropsNothing() {

@@ -22,10 +22,10 @@ import Foundation
 //      exceeds k×MAD on the respective component. Power-vector decomposition
 //      handles axis circularity automatically (J0/J45 are continuous; near-180°
 //      wrap is implicit).
-//   6. Sample-size floor: if rejection would leave fewer than
-//      outlierRejectionMinSurvivors, retain all readings and surface the
-//      spread to the operator via a readingsVaryWidely flag (consumed by
-//      PrescriptionCalculator).
+//   6. Survivor-majority check: keep drops only if a strict majority of
+//      input readings survived. Otherwise retain all readings and surface
+//      the spread to the operator via a readingsVaryWidely flag (consumed
+//      by PrescriptionCalculator).
 //   7. Recompute MEAN M / J0 / J45 on survivors and reconstruct (sph, cyl, ax).
 enum CrossPrintoutAggregator {
 
@@ -35,9 +35,9 @@ enum CrossPrintoutAggregator {
         let ax: Int
         let usedReadings: [RawReading]
         let droppedOutliers: [ConsistencyValidator.DroppedReading]
-        // True when the per-component MAD rejection would have left fewer than
-        // outlierRejectionMinSurvivors. Sample-size floor retains all readings
-        // and surfaces the spread to the operator via .readingsVaryWidely.
+        // True when MAD rejection would have left less than a strict majority
+        // of input readings surviving. Survivor-majority check retains all
+        // readings and surfaces the spread via .readingsVaryWidely.
         let readingsVaryWidely: Bool
     }
 
@@ -175,17 +175,27 @@ enum CrossPrintoutAggregator {
                 survivors.append(r)
             }
 
-            // Sample-size floor: if rejection would leave too few survivors,
-            // retain all readings and surface the spread via readingsVaryWidely.
-            // PrescriptionCalculator reads this and emits .readingsVaryWidely.
-            if survivors.count < Constants.outlierRejectionMinSurvivors {
-                working = eyeReadings
-                reportedDropped = []
-                readingsVaryWidely = true
-            } else {
+            // Survivor-majority check: keep drops only if a strict majority of
+            // input readings survived. With at-or-below half surviving, the
+            // rejection set is too aggressive — retain all and surface the
+            // spread to the operator via readingsVaryWidely.
+            //
+            // Examples:
+            //   3 in, 1 drop → 2 of 3 (majority) → drops accepted
+            //   4 in, 2 drops → 2 of 4 (not majority) → all retained + warn
+            //   9 in, 1 drop → 8 of 9 (majority) → drops accepted
+            //
+            // A fixed floor (e.g., "≥3 survivors") would prevent any drop from
+            // a 3-reading input, contradicting the clinical intent of the
+            // Day-1 axis-120 fix.
+            if survivors.count * 2 > eyeReadings.count {
                 working = survivors
                 reportedDropped = dropped
                 readingsVaryWidely = false
+            } else {
+                working = eyeReadings
+                reportedDropped = []
+                readingsVaryWidely = true
             }
         }
 
