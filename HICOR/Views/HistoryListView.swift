@@ -19,15 +19,24 @@ struct HistoryListView: View {
     init(location: String, date: Date) {
         self.location = location
         _selectedDate = State(initialValue: date)
+        #if DEBUG
+        print("🆕 [HistoryListView] init(location:date:) location=\"\(location)\" date=\(date)")
+        #endif
     }
 
     init(sessionContext: SessionContext) {
         self.location = sessionContext.location
         _selectedDate = State(initialValue: Date())
+        #if DEBUG
+        print("🆕 [HistoryListView] init(sessionContext:) location=\"\(sessionContext.location)\"")
+        #endif
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        #if DEBUG
+        let _ = print("🏗️ [HistoryListView] body eval, availableDates.count=\(availableDates.count) showDatePicker=\(showDatePicker) location=\"\(location)\"")
+        #endif
+        return VStack(spacing: 0) {
             SharedHeader(onBack: { dismiss() })
 
             VStack(spacing: 12) {
@@ -56,6 +65,9 @@ struct HistoryListView: View {
             PatientDetailView(refraction: refraction)
         }
         .sheet(isPresented: $showDatePicker) {
+            #if DEBUG
+            let _ = print("📅 [HistoryListView sheet] presenting picker with availableDates.count=\(availableDates.count)")
+            #endif
             HistoryDatePicker(
                 location: location,
                 currentDate: selectedDate,

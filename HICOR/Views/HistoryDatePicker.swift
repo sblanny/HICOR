@@ -9,6 +9,23 @@ struct HistoryDatePicker: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    init(
+        location: String,
+        currentDate: Date,
+        availableDates: [Date],
+        patientCounts: [Date: Int],
+        onSelect: @escaping (Date) -> Void
+    ) {
+        self.location = location
+        self.currentDate = currentDate
+        self.availableDates = availableDates
+        self.patientCounts = patientCounts
+        self.onSelect = onSelect
+        #if DEBUG
+        print("📅 [HistoryDatePicker] init called, availableDates.count=\(availableDates.count) contents=\(availableDates)")
+        #endif
+    }
+
     private var calendar: Calendar { Calendar.current }
 
     private var selectedDay: Date {
@@ -16,8 +33,14 @@ struct HistoryDatePicker: View {
     }
 
     var body: some View {
-        NavigationStack {
+        #if DEBUG
+        let _ = print("📅 [HistoryDatePicker] body eval, availableDates.count=\(availableDates.count) contents=\(availableDates) patientCounts.count=\(patientCounts.count)")
+        #endif
+        return NavigationStack {
             List(availableDates, id: \.self) { date in
+                #if DEBUG
+                let _ = print("📅 [HistoryDatePicker] List rowContent invoked for date=\(date)")
+                #endif
                 Button {
                     onSelect(date)
                     dismiss()
@@ -40,6 +63,11 @@ struct HistoryDatePicker: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        #if DEBUG
+        .onAppear {
+            print("📅 [HistoryDatePicker] onAppear, availableDates.count=\(availableDates.count)")
+        }
+        #endif
     }
 
     @ViewBuilder
