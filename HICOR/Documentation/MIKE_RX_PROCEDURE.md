@@ -1,6 +1,6 @@
 # MIKE_RX_PROCEDURE.md
 ## Clinical Algorithm for HICOR Prescription Computation
-**Last updated:** April 28, 2026 (escalation threshold matched to implementation: Manual Review fires at 5 printouts, not 4)
+**Last updated:** May 2, 2026 (CYL cross-printout agreement threshold calibrated to inventory step size: 0.50 D → 1.00 D)
 **Status:** Authoritative — this document is the source of truth for Phase 5 implementation
 
 ---
@@ -46,7 +46,9 @@ Mike estimates 10-25% of patients will be referred out. UI tone must treat this 
 
 **Two readings "agree" when:**
 - SPH values within **1.00 D** of each other (Mike's clinical threshold, matches industry repeatability)
-- CYL values within **0.50 D** of each other (industry standard for autorefractor CYL repeatability)
+- CYL values within **1.00 D** of each other (calibrated to inventory step size; see calibration note below)
+
+**CYL threshold calibration (2026-05-02 mid-trip):** Inventory CYL steps are 0.50 D, so cross-printout spreads up to 1.00 D land in adjacent dispense buckets and do not warrant additional printouts. Day 1 + Day 2 of the San Luis trip showed the original 0.50 D industry threshold firing on cases an eye doctor would dispense without hesitation (e.g., printout AVG -1.00 vs printout AVG -1.75). The MAD-based outlier rejection downstream still catches genuine outliers; this only changes when Layer 1 demands more printouts. Approved by Scott + Mike during Day 2 of San Luis trip.
 
 **When readings disagree:**
 - 2 printouts disagreeing on SPH or CYL → require 3rd printout
@@ -238,7 +240,7 @@ When the ConsistencyValidator returns `.consistent`, PrescriptionCalculator proc
 ```swift
 // Cross-printout agreement thresholds
 static let sphAgreementThreshold: Double = 1.00   // Mike's clinical threshold
-static let cylAgreementThreshold: Double = 0.50   // Industry standard
+static let cylAgreementThreshold: Double = 1.00   // Calibrated to inventory CYL step size (2026-05-02 Day 2 mid-trip)
 
 // Axis agreement — sliding scale by CYL magnitude
 static let axisToleranceCylUnder025: Double = 30.0
@@ -358,3 +360,4 @@ Build test cases from these scenarios:
 - **April 26, 2026** — CYL rounding rule corrected: Highlands Optical inventory does not stock 0.25 D CYL increments, so CYL rounds to nearest 0.50 D step. Tie direction is per-eye, driven by that eye's SPH magnitude (|SPH| ≥ 3.00 → stronger; otherwise weaker).
 - **April 28, 2026** — Escalation threshold updated to match implementation. `ConsistencyValidator` fires `.inconsistentEscalate` at `Constants.maxPrintoutsAllowed` (5), not 4. Document was previously stale on this. Behavior unchanged; doc now matches code. See `AUDIT_2026-04-27.md`.
 - **April 28, 2026** — Mike clarification on antimetropia SPH application: each eye uses its own SPH from its own readings; the "lowest absolute SPH" is operator awareness, not a calculation override. Resolves audit Issue D.
+- **May 2, 2026 (San Luis trip Day 2)** — CYL cross-printout agreement threshold raised from 0.50 D (industry standard) to 1.00 D (calibrated to inventory CYL step size). Day 1 + Day 2 field experience showed the 0.50 D threshold firing on cases that should dispense without callback (e.g., printout AVG -1.00 vs printout AVG -1.75 → adjacent inventory buckets). MAD-based outlier rejection downstream still catches genuine outliers. Approved by Scott + Mike during Day 2.

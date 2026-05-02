@@ -172,8 +172,11 @@ final class FinalPrescriptionTests: XCTestCase {
         XCTAssertEqual(Constants.sphAgreementThreshold, 1.00)
     }
 
-    func testPhase5Constants_cylAgreementThreshold_isHalfDiopter() {
-        XCTAssertEqual(Constants.cylAgreementThreshold, 0.50)
+    func testPhase5Constants_cylAgreementThreshold_isOneDiopter() {
+        // Calibrated 2026-05-02 mid-trip: bumped from 0.50 D (industry
+        // standard) to 1.00 D (inventory CYL step size). See
+        // MIKE_RX_PROCEDURE.md §1.
+        XCTAssertEqual(Constants.cylAgreementThreshold, 1.00)
     }
 
     func testPhase5Constants_tier0SphMax_matchesMike() {

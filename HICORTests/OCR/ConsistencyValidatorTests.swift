@@ -375,8 +375,10 @@ final class ConsistencyValidatorTests: XCTestCase {
     }
 
     func testOnePlanoOneNonPlanoCYL_flagsOnCYLNotAxis() {
-        // 0.00 vs -0.50 cyl exceeds the 0.50 D agreement threshold.
-        // Path should fail on CYL before axis is even examined.
+        // 0.00 vs -1.25 cyl exceeds the 1.00 D agreement threshold.
+        // Path should fail on CYL before axis is even examined (axis check is
+        // also skipped because one side is plano, but this test asserts the
+        // CYL-precedes-axis branch and confirms the diff banner is CYL-shaped).
         let p1 = makeResult(
             rightSPHs: [-1.00],
             leftSPHs:  [-1.00],
@@ -393,8 +395,8 @@ final class ConsistencyValidatorTests: XCTestCase {
             leftSPHs:  [-1.00],
             rightMachineAvgSPH: -1.00,
             leftMachineAvgSPH:  -1.00,
-            rightMachineAvgCYL: -0.75,
-            leftMachineAvgCYL:  -0.75,
+            rightMachineAvgCYL: -1.25,
+            leftMachineAvgCYL:  -1.25,
             rightMachineAvgAX: 95,
             leftMachineAvgAX:  95,
             photoIndex: 1
@@ -405,6 +407,78 @@ final class ConsistencyValidatorTests: XCTestCase {
             XCTAssertFalse(reason.contains("axis"), "Reason must not reference axis when CYL fails first, got: \(reason)")
         } else {
             XCTFail("Expected .inconsistentAddPhoto on CYL diff, got \(outcome)")
+        }
+    }
+
+    // MARK: - CYL agreement threshold (calibrated 2026-05-02 mid-trip)
+    //
+    // The CYL cross-printout agreement threshold was bumped from 0.50 D to
+    // 1.00 D after Day 1 + Day 2 of the San Luis trip showed the 0.50 D
+    // threshold was firing on cases an eye doctor would dispense without
+    // hesitation. Inventory CYL steps are 0.50 D, so cross-printout spreads up
+    // to 1.00 D land in adjacent dispense buckets and do not warrant
+    // additional printouts. Approved by Scott + Mike during Day 2.
+
+    func testConsistency_cylSpreadAtNewThreshold_passes() {
+        // Two printout AVGs differing by 0.75 D in CYL — under the new 1.00 D
+        // threshold, the consistency check should accept.
+        let p1 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.00,
+            rightMachineAvgCYL: -0.50,
+            leftMachineAvgCYL:  -0.50,
+            rightMachineAvgAX: 90,
+            leftMachineAvgAX:  90,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.00,
+            rightMachineAvgCYL: -1.25,
+            leftMachineAvgCYL:  -1.25,
+            rightMachineAvgAX: 90,
+            leftMachineAvgAX:  90,
+            photoIndex: 1
+        )
+        assertConsistent(ConsistencyValidator().validate([p1, p2]))
+    }
+
+    func testConsistency_cylSpreadAboveNewThreshold_failsAndAsksForAnotherPrintout() {
+        // Two printout AVGs differing by 1.25 D in CYL — over the new 1.00 D
+        // threshold, the consistency check should still demand another
+        // printout.
+        let p1 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.00,
+            rightMachineAvgCYL: -0.50,
+            leftMachineAvgCYL:  -0.50,
+            rightMachineAvgAX: 90,
+            leftMachineAvgAX:  90,
+            photoIndex: 0
+        )
+        let p2 = makeResult(
+            rightSPHs: [-2.00],
+            leftSPHs:  [-2.00],
+            rightMachineAvgSPH: -2.00,
+            leftMachineAvgSPH:  -2.00,
+            rightMachineAvgCYL: -1.75,
+            leftMachineAvgCYL:  -1.75,
+            rightMachineAvgAX: 90,
+            leftMachineAvgAX:  90,
+            photoIndex: 1
+        )
+        let outcome = ConsistencyValidator().validate([p1, p2])
+        if case .inconsistentAddPhoto(let reason, let count) = outcome {
+            XCTAssertEqual(count, 2)
+            XCTAssertTrue(reason.contains("cylinder"), "Reason should reference cylinder, got: \(reason)")
+        } else {
+            XCTFail("Expected .inconsistentAddPhoto for 1.25 D CYL spread, got \(outcome)")
         }
     }
 

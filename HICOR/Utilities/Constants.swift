@@ -19,7 +19,7 @@ enum Constants {
 
     // Cross-printout agreement thresholds
     static let sphAgreementThreshold: Double = 1.00   // Mike's clinical threshold (§1)
-    static let cylAgreementThreshold: Double = 0.50   // Industry standard (§1)
+    static let cylAgreementThreshold: Double = 1.00   // Calibrated to inventory CYL step size (§1) — see MIKE_RX_PROCEDURE.md for 2026-05-02 Day 2 calibration
 
     // Phase 5 outlier rejection — k×MAD on power-vector components (§5).
     // Used by CrossPrintoutAggregator only; ConsistencyValidator's pairwise
