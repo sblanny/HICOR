@@ -21,4 +21,20 @@ enum DiopterFormatter {
     static func formatAxis(_ axis: Int) -> String {
         String(format: "%3d°", axis)
     }
+
+    /// Formats a calculated CYL value for prescription display, appending a
+    /// "(dispense -2.00)" annotation when the calculated value falls in the
+    /// Tier 2 stretch-fit range (-3.00 ≤ CYL < -2.00 per
+    /// MIKE_RX_PROCEDURE.md §7). Highlands inventory caps CYL at -2.00, so
+    /// the volunteer needs to see both the clinical truth and the value to
+    /// transcribe into FileMaker. Tier 1 (|CYL| ≤ 2.00) and Tier 3 (|CYL| >
+    /// 3.00) render the calculated value alone.
+    static func cylDisplayString(calculated: Double) -> String {
+        let formatted = format(calculated)
+        let inTier2Range = calculated < -Constants.cylTier1Max
+            && calculated >= -Constants.cylTier2Max
+        guard inTier2Range else { return formatted }
+        let dispense = format(-Constants.cylTier1Max)
+        return "\(formatted) (dispense \(dispense))"
+    }
 }

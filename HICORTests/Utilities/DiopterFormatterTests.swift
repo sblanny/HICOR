@@ -41,4 +41,52 @@ final class DiopterFormatterTests: XCTestCase {
         XCTAssertEqual(DiopterFormatter.formatAxis(108),  "108°")
         XCTAssertEqual(DiopterFormatter.formatAxis(180),  "180°")
     }
+
+    // MARK: - CYL display with Tier 2 dispense annotation
+    //
+    // MIKE_RX_PROCEDURE.md §7 Tier 2 stretch fit (CYL between -2.00 and -3.00):
+    // Highlands inventory caps CYL at -2.00. Volunteer must see both the
+    // calculated value (clinical truth) AND the dispense value (-2.00) so the
+    // FileMaker entry uses the inventory cap, not the calculated.
+
+    func testCylDisplay_tier1_noAnnotation() {
+        XCTAssertEqual(DiopterFormatter.cylDisplayString(calculated: -1.50), "-1.50")
+    }
+
+    func testCylDisplay_atTier2LowerBoundary_noAnnotation() {
+        // -2.00 exactly is the cap itself — calculated == dispense, no annotation.
+        XCTAssertEqual(DiopterFormatter.cylDisplayString(calculated: -2.00), "-2.00")
+    }
+
+    func testCylDisplay_tier2_midRange_annotated() {
+        XCTAssertEqual(
+            DiopterFormatter.cylDisplayString(calculated: -2.50),
+            "-2.50 (dispense -2.00)"
+        )
+    }
+
+    func testCylDisplay_tier2_quarterStep_annotated() {
+        XCTAssertEqual(
+            DiopterFormatter.cylDisplayString(calculated: -2.75),
+            "-2.75 (dispense -2.00)"
+        )
+    }
+
+    func testCylDisplay_tier2_atUpperBoundary_annotated() {
+        // -3.00 is still Tier 2 (boundary inclusive per Constants.cylTier2Max).
+        XCTAssertEqual(
+            DiopterFormatter.cylDisplayString(calculated: -3.00),
+            "-3.00 (dispense -2.00)"
+        )
+    }
+
+    func testCylDisplay_tier3_noAutoCapAnnotation() {
+        // > -3.00 is Tier 3; clinical decision is operator's, not auto-cappable.
+        XCTAssertEqual(DiopterFormatter.cylDisplayString(calculated: -3.25), "-3.25")
+    }
+
+    func testCylDisplay_plano_noAnnotation() {
+        // Tier 0/1 zero CYL must render as the existing " 0.00" plano form.
+        XCTAssertEqual(DiopterFormatter.cylDisplayString(calculated: 0.0), " 0.00")
+    }
 }

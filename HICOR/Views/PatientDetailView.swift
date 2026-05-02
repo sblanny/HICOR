@@ -95,9 +95,11 @@ struct PatientDetailView: View {
     private func prescriptionRow(label: String, sph: Double, cyl: Double, ax: Int, source: String?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.subheadline.weight(.semibold))
-            HStack(spacing: 16) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 Text(DiopterFormatter.format(sph)).frame(width: 70, alignment: .leading)
-                Text(DiopterFormatter.format(cyl)).frame(width: 70, alignment: .leading)
+                Text(DiopterFormatter.cylDisplayString(calculated: cyl))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 Text(DiopterFormatter.formatAxis(ax))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)

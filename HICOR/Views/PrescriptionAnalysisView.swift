@@ -187,9 +187,11 @@ struct PrescriptionAnalysisView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.subheadline.weight(.semibold))
             if let rx = rx {
-                HStack(spacing: 16) {
+                HStack(alignment: .firstTextBaseline, spacing: 16) {
                     Text(DiopterFormatter.format(rx.sph)).frame(width: 70, alignment: .leading)
-                    Text(DiopterFormatter.format(rx.cyl)).frame(width: 70, alignment: .leading)
+                    Text(DiopterFormatter.cylDisplayString(calculated: rx.cyl))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     Text(DiopterFormatter.formatAxis(rx.ax))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
