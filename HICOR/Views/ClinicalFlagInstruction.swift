@@ -134,6 +134,14 @@ struct ClinicalFlagInstruction: Equatable {
                 )
             )
 
+        case .readingsVaryWidely(let eye, let count):
+            let eyeLabel = (eye == .right) ? "Right" : "Left"
+            return ClinicalFlagInstruction(
+                severity: .warning,
+                title: "Readings vary widely",
+                body: "\(eyeLabel) eye: \(count) captures vary too much for automatic outlier rejection. All readings retained — review the individual values before dispensing."
+            )
+
         case .manualReviewRequired(let reason):
             return ClinicalFlagInstruction(
                 severity: .blocking,

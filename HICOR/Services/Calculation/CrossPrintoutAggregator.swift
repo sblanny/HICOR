@@ -1,20 +1,28 @@
 import Foundation
 
-// Cross-printout aggregation via Thibos M/J0/J45 medians + outlier rejection +
-// recomputed means of survivors. See MIKE_RX_PROCEDURE.md §1 (agreement
-// thresholds), §2 (axis sliding scale), §10 (SPH-only readings), and Phase 5
-// Priority step 2 (cross-printout aggregation).
+// Cross-printout aggregation via Thibos M/J0/J45 medians + k×MAD outlier
+// rejection + recomputed means of survivors. See MIKE_RX_PROCEDURE.md §1
+// (agreement thresholds — different layer in ConsistencyValidator), §5
+// (outlier rejection / Phase 5), and §10 (SPH-only readings).
 //
 // Algorithm:
 //   1. Filter readings to the requested eye.
-//   2. Compute median M (all readings — sphOnly included), median J0/J45
-//      (full readings only — sphOnly excluded from cyl/axis math per §10).
-//   3. Flag outliers:
-//      - M deviates from median M by > sphAgreementThreshold (1.00 D)
-//      - cyl deviates from median cyl-from-vectors by > cylAgreementThreshold (0.50 D)
-//      - axis deviates (circularly) from median axis by > sliding-scale tolerance
-//   4. Drop outliers, recompute MEAN M/J0/J45 on survivors.
-//   5. Reconstruct final (sph, cyl, ax).
+//   2. Compute medians on power-vector components: M (all readings — sphOnly
+//      included), J0 / J45 (full readings only — sphOnly excluded from
+//      cyl/axis math per §10).
+//   3. Compute MAD per component (median of absolute deviations from median),
+//      floored at outlierRejectionMadFloor so identical readings don't
+//      collapse the tolerance window to zero.
+//   4. Drop a reading when its M deviation exceeds k×MAD on M, OR exceeds the
+//      ANSI 1.00 D hard floor on M, OR (when full) its J0 / J45 deviation
+//      exceeds k×MAD on the respective component. Power-vector decomposition
+//      handles axis circularity automatically (J0/J45 are continuous; near-180°
+//      wrap is implicit).
+//   5. Sample-size floor: if rejection would leave fewer than
+//      outlierRejectionMinSurvivors, retain all readings and surface the
+//      spread to the operator via a readingsVaryWidely flag (consumed by
+//      PrescriptionCalculator).
+//   6. Recompute MEAN M / J0 / J45 on survivors and reconstruct (sph, cyl, ax).
 enum CrossPrintoutAggregator {
 
     struct AggregatedReading: Equatable {
@@ -23,12 +31,19 @@ enum CrossPrintoutAggregator {
         let ax: Int
         let usedReadings: [RawReading]
         let droppedOutliers: [ConsistencyValidator.DroppedReading]
+        // True when the per-component MAD rejection would have left fewer than
+        // outlierRejectionMinSurvivors. Sample-size floor retains all readings
+        // and surfaces the spread to the operator via .readingsVaryWidely.
+        let readingsVaryWidely: Bool
     }
 
     static func aggregate(readings: [RawReading], for eye: Eye) -> AggregatedReading {
         let eyeReadings = readings.filter { $0.eye == eye }
         guard !eyeReadings.isEmpty else {
-            return AggregatedReading(sph: 0, cyl: 0, ax: 180, usedReadings: [], droppedOutliers: [])
+            return AggregatedReading(
+                sph: 0, cyl: 0, ax: 180,
+                usedReadings: [], droppedOutliers: [], readingsVaryWidely: false
+            )
         }
 
         // Single reading: no averaging, no outlier detection.
@@ -39,69 +54,102 @@ enum CrossPrintoutAggregator {
                 cyl: r.isSphOnly ? 0 : r.cyl,
                 ax: r.isSphOnly ? 180 : r.ax,
                 usedReadings: eyeReadings,
-                droppedOutliers: []
+                droppedOutliers: [],
+                readingsVaryWidely: false
             )
         }
 
         let fullReadings = eyeReadings.filter { !$0.isSphOnly }
 
-        // Medians (pre-drop baseline for outlier detection).
+        // Medians on power-vector components (pre-drop baseline).
         let allMs = eyeReadings.map { effectiveM($0) }
         let medianM = median(allMs)
-        let (medianCylFromVectors, medianAxis): (Double, Int)
+        let medianJ0: Double
+        let medianJ45: Double
         if fullReadings.isEmpty {
-            medianCylFromVectors = 0
-            medianAxis = 180
+            medianJ0 = 0
+            medianJ45 = 0
         } else {
             let j0s = fullReadings.map { PowerVector.toJ0(cyl: $0.cyl, axDegrees: $0.ax) }
             let j45s = fullReadings.map { PowerVector.toJ45(cyl: $0.cyl, axDegrees: $0.ax) }
-            let mJ0 = median(j0s)
-            let mJ45 = median(j45s)
-            medianCylFromVectors = -2.0 * sqrt(mJ0 * mJ0 + mJ45 * mJ45)
-            medianAxis = axisFromVectors(j0: mJ0, j45: mJ45)
+            medianJ0 = median(j0s)
+            medianJ45 = median(j45s)
         }
 
-        let axisTolerance = AxisMath.toleranceForCyl(medianCylFromVectors)
+        // MAD per component, floored. Empty fullReadings → infinite J-thresholds
+        // (those checks are unreachable for sphOnly anyway).
+        let madM: Double = max(
+            median(eyeReadings.map { abs(effectiveM($0) - medianM) }),
+            Constants.outlierRejectionMadFloor
+        )
+        let madJ0: Double
+        let madJ45: Double
+        if fullReadings.isEmpty {
+            madJ0 = .infinity
+            madJ45 = .infinity
+        } else {
+            let j0Devs = fullReadings.map { abs(PowerVector.toJ0(cyl: $0.cyl, axDegrees: $0.ax) - medianJ0) }
+            let j45Devs = fullReadings.map { abs(PowerVector.toJ45(cyl: $0.cyl, axDegrees: $0.ax) - medianJ45) }
+            madJ0 = max(median(j0Devs), Constants.outlierRejectionMadFloor)
+            madJ45 = max(median(j45Devs), Constants.outlierRejectionMadFloor)
+        }
 
-        // Outlier detection.
+        let k = Constants.outlierRejectionK
+        let thresholdM = k * madM
+        let thresholdJ0 = k * madJ0
+        let thresholdJ45 = k * madJ45
+        let ansiFloor = Constants.outlierRejectionAnsiHardFloorM
+
         var survivors: [RawReading] = []
         var dropped: [ConsistencyValidator.DroppedReading] = []
         for r in eyeReadings {
             let m = effectiveM(r)
-            if abs(m - medianM) > Constants.sphAgreementThreshold {
+            let devM = abs(m - medianM)
+
+            // 1. M-MAD check (adaptive)
+            if devM > thresholdM {
                 dropped.append(.init(
-                    reading: r,
-                    photoIndex: r.sourcePhotoIndex,
-                    eye: eye,
+                    reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
                     reason: String(
-                        format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by more than %.2f D",
-                        m, medianM, Constants.sphAgreementThreshold
+                        format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by %.2f D (3×MAD threshold %.2f D)",
+                        m, medianM, devM, thresholdM
                     )
                 ))
                 continue
             }
-            if !r.isSphOnly && abs(r.cyl - medianCylFromVectors) > Constants.cylAgreementThreshold {
+            // 2. ANSI hard floor on M (independent safety net for sign-flip outliers)
+            if devM > ansiFloor {
                 dropped.append(.init(
-                    reading: r,
-                    photoIndex: r.sourcePhotoIndex,
-                    eye: eye,
+                    reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
                     reason: String(
-                        format: "Phase 5: cylinder %.2f D differs from median %.2f D by more than %.2f D",
-                        r.cyl, medianCylFromVectors, Constants.cylAgreementThreshold
+                        format: "Phase 5: spherical equivalent %.2f D differs from median %.2f D by more than %.2f D (ANSI hard floor)",
+                        m, medianM, ansiFloor
                     )
                 ))
                 continue
             }
+            // 3. J0 / J45 MAD checks (full readings only)
             if !r.isSphOnly && !fullReadings.isEmpty {
-                let axDiff = AxisMath.circularDiff(r.ax, medianAxis)
-                if Double(axDiff) > axisTolerance {
+                let j0 = PowerVector.toJ0(cyl: r.cyl, axDegrees: r.ax)
+                let j45 = PowerVector.toJ45(cyl: r.cyl, axDegrees: r.ax)
+                let devJ0 = abs(j0 - medianJ0)
+                let devJ45 = abs(j45 - medianJ45)
+                if devJ0 > thresholdJ0 {
                     dropped.append(.init(
-                        reading: r,
-                        photoIndex: r.sourcePhotoIndex,
-                        eye: eye,
+                        reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
                         reason: String(
-                            format: "Phase 5: axis %d° differs from median %d° by %d° (tolerance %.0f°)",
-                            r.ax, medianAxis, axDiff, axisTolerance
+                            format: "Phase 5: power-vector J0 %.3f differs from median %.3f by %.3f (3×MAD threshold %.3f) — likely cyl/axis outlier",
+                            j0, medianJ0, devJ0, thresholdJ0
+                        )
+                    ))
+                    continue
+                }
+                if devJ45 > thresholdJ45 {
+                    dropped.append(.init(
+                        reading: r, photoIndex: r.sourcePhotoIndex, eye: eye,
+                        reason: String(
+                            format: "Phase 5: power-vector J45 %.3f differs from median %.3f by %.3f (3×MAD threshold %.3f) — likely cyl/axis outlier",
+                            j45, medianJ45, devJ45, thresholdJ45
                         )
                     ))
                     continue
@@ -110,24 +158,33 @@ enum CrossPrintoutAggregator {
             survivors.append(r)
         }
 
-        // Degenerate edge case: all readings flagged. Fall back to the original
-        // set (ConsistencyValidator already gated the session; refusing to
-        // output anything would lose information the operator still needs to
-        // see).
-        let working = survivors.isEmpty ? eyeReadings : survivors
-        let reportedDropped = survivors.isEmpty ? [] : dropped
+        // Sample-size floor: if rejection would leave too few survivors,
+        // retain all readings and surface the spread via readingsVaryWidely.
+        // PrescriptionCalculator reads this and emits .readingsVaryWidely.
+        let working: [RawReading]
+        let reportedDropped: [ConsistencyValidator.DroppedReading]
+        let readingsVaryWidely: Bool
+        if survivors.count < Constants.outlierRejectionMinSurvivors
+            && eyeReadings.count >= Constants.outlierRejectionMinSurvivors {
+            working = eyeReadings
+            reportedDropped = []
+            readingsVaryWidely = true
+        } else {
+            working = survivors
+            reportedDropped = dropped
+            readingsVaryWidely = false
+        }
 
-        // Recompute means on survivors.
+        // Recompute means on the working set.
         let meanM = working.map { effectiveM($0) }.reduce(0, +) / Double(working.count)
         let fullSurvivors = working.filter { !$0.isSphOnly }
 
         if fullSurvivors.isEmpty {
             return AggregatedReading(
-                sph: meanM,
-                cyl: 0,
-                ax: 180,
+                sph: meanM, cyl: 0, ax: 180,
                 usedReadings: working,
-                droppedOutliers: reportedDropped
+                droppedOutliers: reportedDropped,
+                readingsVaryWidely: readingsVaryWidely
             )
         }
 
@@ -141,7 +198,8 @@ enum CrossPrintoutAggregator {
             cyl: final.cyl,
             ax: final.ax,
             usedReadings: working,
-            droppedOutliers: reportedDropped
+            droppedOutliers: reportedDropped,
+            readingsVaryWidely: readingsVaryWidely
         )
     }
 
@@ -160,15 +218,4 @@ enum CrossPrintoutAggregator {
         if n % 2 == 1 { return sorted[n / 2] }
         return (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
     }
-
-    private static func axisFromVectors(j0: Double, j45: Double) -> Int {
-        let mag = sqrt(j0 * j0 + j45 * j45)
-        if mag < 1e-9 { return 180 }
-        let rad = atan2(j45, j0) / 2.0
-        var deg = Int((rad * 180.0 / .pi).rounded())
-        while deg <= 0 { deg += 180 }
-        while deg > 180 { deg -= 180 }
-        return deg
-    }
-
 }

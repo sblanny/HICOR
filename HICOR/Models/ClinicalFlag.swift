@@ -21,5 +21,6 @@ enum ClinicalFlag: Equatable, Codable {
     case insufficientReadings(eye: Eye, count: Int, reason: InsufficientReadingsReason)
     case pdMeasurementRequired(spreadMm: Double)
     case axisAgreementExceeded(eye: Eye, spread: Double, tolerance: Double)
+    case readingsVaryWidely(eye: Eye, count: Int)
     case manualReviewRequired(reason: String)
 }

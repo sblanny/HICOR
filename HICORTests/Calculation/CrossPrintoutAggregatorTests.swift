@@ -153,6 +153,162 @@ final class CrossPrintoutAggregatorTests: XCTestCase {
         XCTAssertEqual(dropped?.eye, .right)
         XCTAssertFalse(dropped?.reason.isEmpty ?? true, "drop reason must be populated for operator display")
     }
+
+    // MARK: - k=3 MAD scenarios
+
+    func testAggregate_axisOutlierAmidTightCluster_dropsViaJ45MAD() {
+        // Day-1 field scenario: 3 printouts × 3 readings each. Eight readings
+        // cluster around axis 60°; one reading at axis 120° is an outlier on
+        // J45. The old fixed-tolerance algorithm got stuck here because the
+        // median pulled toward 78° and sliding-scale tolerance was wide enough
+        // to keep the bad reading in.
+        let axisData: [(sph: Double, cyl: Double, ax: Int, photo: Int)] = [
+            (-2.00, -1.00, 58, 0), (-2.00, -1.00, 64, 0), (-2.00, -1.00, 59, 0),
+            (-2.00, -1.00, 65, 1), (-2.00, -1.00, 69, 1), (-2.00, -1.00, 64, 1),
+            (-2.00, -1.00, 57, 2), (-2.00, -1.00, 58, 2), (-2.00, -1.00, 120, 2)
+        ]
+        let readings = axisData.map { makeReading(sph: $0.sph, cyl: $0.cyl, ax: $0.ax, photo: $0.photo) }
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertEqual(result.droppedOutliers.count, 1, "axis-120 outlier should be dropped on J45 MAD")
+        XCTAssertEqual(result.droppedOutliers.first?.reading.ax, 120)
+        XCTAssertEqual(result.droppedOutliers.first?.photoIndex, 2)
+        XCTAssertEqual(result.usedReadings.count, 8)
+        // Survivors cluster around 62°; allow ±4° for averaging across the cluster.
+        XCTAssertEqual(result.ax, 62, accuracy: 4)
+        XCTAssertFalse(result.readingsVaryWidely)
+    }
+
+    func testAggregate_sphSignOutlier_droppedByMadOrAnsiFloor() {
+        // 12 readings, one is +2.50 amid a -1.25/-1.50/-1.75 cluster. Either
+        // M-MAD or the ANSI hard floor should catch it — assertion is
+        // path-agnostic.
+        let cluster: [(Double, Double, Int)] = [
+            (-1.50, -0.50, 90), (-1.75, -0.50, 90), (-1.50, -0.50, 90),
+            (-1.75, -0.50, 90), (-1.50, -0.50, 90), (-1.25, -0.50, 90),
+            (-1.50, -0.50, 90), (-1.50, -0.50, 90), (-1.75, -0.50, 90),
+            (+2.50, -0.50, 90), (-1.25, -0.50, 90), (-1.50, -0.50, 90)
+        ]
+        let readings = cluster.enumerated().map { (i, t) in
+            makeReading(sph: t.0, cyl: t.1, ax: t.2, photo: i / 3)
+        }
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertEqual(result.droppedOutliers.count, 1)
+        XCTAssertEqual(result.droppedOutliers.first?.reading.sph, +2.50)
+        XCTAssertEqual(result.usedReadings.count, 11)
+        XCTAssertFalse(result.readingsVaryWidely)
+    }
+
+    func testAggregate_nearPlanoWithBadAxisReading_dropsOutlier_doesNotBlockTier0Path() {
+        // Left eye near-plano cluster (cyl ~0); one reading has a bad axis.
+        // Power-vector J0/J45 magnitudes are tiny but the bad axis still
+        // produces a measurable deviation against the cluster's near-zero
+        // J0/J45 — confirming Tier 0 path is no longer blocked by single bad
+        // axis on a near-plano eye.
+        let readings: [RawReading] = [
+            makeReading(sph: 0.25, cyl: 0,      ax: 0,   photo: 0, eye: .left, sphOnly: true),
+            makeReading(sph: 0.25, cyl: 0,      ax: 0,   photo: 1, eye: .left, sphOnly: true),
+            makeReading(sph: 0.25, cyl: 0,      ax: 0,   photo: 2, eye: .left, sphOnly: true),
+            makeReading(sph: 0.25, cyl: -0.25,  ax: 10,  photo: 3, eye: .left),
+            makeReading(sph: 0.25, cyl: -0.25,  ax: 12,  photo: 4, eye: .left),
+            makeReading(sph: 0.25, cyl: -0.25,  ax: 87,  photo: 5, eye: .left)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .left)
+
+        XCTAssertEqual(result.droppedOutliers.count, 1)
+        XCTAssertEqual(result.droppedOutliers.first?.photoIndex, 5)
+        XCTAssertFalse(result.readingsVaryWidely)
+        XCTAssertEqual(result.sph, 0.25, accuracy: 0.05)
+    }
+
+    func testAggregate_naturallyVariedReadings_dropsNothing() {
+        // Genuine spread, not outlier-driven. Algorithm must not over-reject.
+        let readings = [
+            makeReading(sph: -2.00, cyl: -0.75, ax: 80,  photo: 0),
+            makeReading(sph: -2.50, cyl: -1.25, ax: 95,  photo: 1),
+            makeReading(sph: -1.75, cyl: -1.00, ax: 85,  photo: 2),
+            makeReading(sph: -2.25, cyl: -1.50, ax: 90,  photo: 3)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertTrue(result.droppedOutliers.isEmpty, "natural variation must not trigger rejection")
+        XCTAssertEqual(result.usedReadings.count, 4)
+        XCTAssertFalse(result.readingsVaryWidely)
+    }
+
+    func testAggregate_tightClusterWithObviousOutlier_madFloorPreventsZeroTolerance() {
+        // 4 readings identical at -2.00, plus one at -3.50.
+        // Without MAD floor: median deviation = 0 → threshold = 0 → would
+        // reject any noise. With MAD floor (0.05): threshold = 0.15 → only
+        // -3.50 (deviates 1.50) is dropped.
+        let readings = [
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 0),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 1),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 2),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 3),
+            makeReading(sph: -3.50, cyl: -1.00, ax: 90, photo: 4)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertEqual(result.droppedOutliers.count, 1)
+        XCTAssertEqual(result.droppedOutliers.first?.reading.sph, -3.50)
+        XCTAssertEqual(result.usedReadings.count, 4)
+        XCTAssertFalse(result.readingsVaryWidely)
+    }
+
+    func testAggregate_rejectionWouldLeaveTooFew_retainsAllAndFlagsWideVariance() {
+        // 4 readings, 3 wildly different. ANSI floor would drop +5.00 and
+        // -8.00, leaving 2 survivors — below minSurvivors (3). Algorithm
+        // should retain all 4 and set readingsVaryWidely=true.
+        let readings = [
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 0),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 1),
+            makeReading(sph: +5.00, cyl: -1.00, ax: 90, photo: 2),
+            makeReading(sph: -8.00, cyl: -1.00, ax: 90, photo: 3)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertTrue(result.droppedOutliers.isEmpty, "sample-size floor blocks rejection")
+        XCTAssertEqual(result.usedReadings.count, 4)
+        XCTAssertTrue(result.readingsVaryWidely, "wide variance must be flagged for operator")
+    }
+
+    func testAggregate_ansiHardFloorCatchesOutlierWhenMadIsLarge() {
+        // High natural variance inflates MAD; the ANSI hard floor independently
+        // catches the +0.50 reading that deviates >1.00 D from median M.
+        let readings = [
+            makeReading(sph: -1.00, cyl: -1.00, ax: 90, photo: 0),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 1),
+            makeReading(sph: -3.00, cyl: -1.00, ax: 90, photo: 2),
+            makeReading(sph: -1.00, cyl: -1.00, ax: 90, photo: 3),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 90, photo: 4),
+            makeReading(sph: +0.50, cyl: -1.00, ax: 90, photo: 5)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertTrue(
+            result.droppedOutliers.contains { $0.reading.sph == +0.50 },
+            "rejection must fire on the +0.50 outlier (via M-MAD or ANSI floor)"
+        )
+        XCTAssertFalse(result.readingsVaryWidely)
+    }
+
+    func testAggregate_axisWrapAroundZero180_noFalseRejection() {
+        // Readings on either side of the 0/180 boundary represent the same
+        // axis clinically. Power-vector J0/J45 makes them numerically close,
+        // so MAD must not trigger.
+        let readings = [
+            makeReading(sph: -2.00, cyl: -1.00, ax: 5,   photo: 0),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 175, photo: 1),
+            makeReading(sph: -2.00, cyl: -1.00, ax: 178, photo: 2)
+        ]
+        let result = CrossPrintoutAggregator.aggregate(readings: readings, for: .right)
+
+        XCTAssertTrue(result.droppedOutliers.isEmpty, "axis wrap must not trigger rejection")
+        let distFrom0Or180 = min(abs(result.ax - 180), abs(result.ax))
+        XCTAssertLessThanOrEqual(distFrom0Or180, 5)
+    }
 }
 
 // MARK: - Helpers

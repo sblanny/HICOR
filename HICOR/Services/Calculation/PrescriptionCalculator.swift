@@ -216,6 +216,9 @@ enum PrescriptionCalculator {
                 : .recomputedWithOutliersDropped
             acceptedReadings = aggregate.usedReadings
             phase5Dropped = aggregate.droppedOutliers
+            if aggregate.readingsVaryWidely {
+                flags.append(.readingsVaryWidely(eye: eye, count: aggregate.usedReadings.count))
+            }
         }
 
         let roundedSph = DiopterRounder.roundSph(rawSph, forCyl: rawCyl)

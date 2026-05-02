@@ -21,6 +21,15 @@ enum Constants {
     static let sphAgreementThreshold: Double = 1.00   // Mike's clinical threshold (§1)
     static let cylAgreementThreshold: Double = 0.50   // Industry standard (§1)
 
+    // Phase 5 outlier rejection — k×MAD on power-vector components (§5).
+    // Used by CrossPrintoutAggregator only; ConsistencyValidator's pairwise
+    // AVG check (different layer, runs earlier) keeps the fixed thresholds
+    // above.
+    static let outlierRejectionK: Double = 3.0
+    static let outlierRejectionMadFloor: Double = 0.05    // diopters / J units; prevents zero-tolerance when readings agree
+    static let outlierRejectionAnsiHardFloorM: Double = 1.00   // diopters; sign-flip safety net independent of MAD
+    static let outlierRejectionMinSurvivors: Int = 3
+
     // Axis agreement — sliding scale by CYL magnitude (§2)
     static let axisToleranceCylUnder025: Double = 30.0
     static let axisToleranceCyl025To050: Double = 20.0
